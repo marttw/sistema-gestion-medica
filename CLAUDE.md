@@ -228,8 +228,9 @@ Cuando solicite una funcionalidad:
 8. Incluí validaciones y manejo de errores.
 9. Incorporá tests proporcionales a la funcionalidad.
 10. Explicá cómo probar la implementación.
-11. Sugerí un mensaje de commit.
-12. Esperá a que te indique la siguiente feature.
+11. Agregá una entrada en `STATUS.md` con lo que se hizo, cómo (herramientas instaladas, comandos), para qué se usa cada herramienta en el proyecto y las decisiones tomadas con su motivo. Actualizá la tabla de resumen. Se incluye en el mismo commit de la story.
+12. Sugerí un mensaje de commit.
+13. Esperá a que te indique la siguiente feature.
 
 No adelantes funcionalidades futuras.
 
