@@ -9,6 +9,8 @@ Aplicación web multiusuario para que médicos gestionen a sus pacientes. Proyec
 - [Next.js 16](https://nextjs.org) con App Router
 - React 19
 - TypeScript (modo `strict`)
+- Tailwind CSS 4
+- shadcn/ui sobre Base UI
 - ESLint (`eslint-config-next`)
 - pnpm
 
@@ -47,12 +49,26 @@ Abrí [http://localhost:3000](http://localhost:3000) en el navegador.
 
 ```
 src/
-└── app/            # App Router: rutas, layouts y páginas
-    ├── layout.tsx  # Layout raíz (<html>, <body>, metadata, fuentes)
-    ├── page.tsx    # Ruta "/" (pantalla de bienvenida)
-    └── globals.css # Estilos globales
-public/             # Archivos estáticos
+├── app/               # App Router: rutas, layouts y páginas
+│   ├── layout.tsx     # Layout raíz (<html>, <body>, metadata, fuentes)
+│   ├── page.tsx       # Ruta "/" (pantalla de bienvenida)
+│   └── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
+├── components/ui/     # Componentes de shadcn/ui (código propio del proyecto)
+└── lib/utils.ts       # Helper `cn` para combinar clases
+public/                # Archivos estáticos
+components.json        # Configuración de shadcn/ui
 ```
+
+## Estilos y componentes
+
+- Los colores y radios se definen como variables CSS en `src/app/globals.css` (`:root` para modo claro, `.dark` para oscuro) y se exponen como clases de Tailwind (`bg-primary`, `text-muted-foreground`, etc.). Para cambiar la paleta, se modifican esas variables.
+- Para agregar un componente de shadcn/ui:
+
+  ```bash
+  pnpm dlx shadcn@latest add <componente>
+  ```
+
+  El código se copia en `src/components/ui/` y pasa a ser parte del proyecto.
 
 ### Convención para nuevas carpetas
 
