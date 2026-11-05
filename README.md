@@ -12,6 +12,9 @@ Aplicación web multiusuario para que médicos gestionen a sus pacientes. Proyec
 - Tailwind CSS 4
 - shadcn/ui sobre Base UI
 - PostgreSQL 17 (Docker) + Prisma ORM 7
+- Better Auth (email y contraseña, sesiones en base de datos)
+- React Hook Form + Zod
+- Vitest
 - ESLint (`eslint-config-next`)
 - pnpm
 
@@ -30,7 +33,13 @@ pnpm install          # también genera el cliente de Prisma (postinstall)
 cp .env.example .env  # completar con valores propios
 ```
 
-En `.env`, reemplazá `change-me` por una contraseña propia, tanto en `POSTGRES_PASSWORD` como dentro de `DATABASE_URL`. Usá solo letras y números, para no tener que codificar caracteres especiales en la URL. `.env` nunca se commitea.
+En `.env`:
+
+- Reemplazá `change-me` por una contraseña propia, tanto en `POSTGRES_PASSWORD` como dentro de `DATABASE_URL`. Usá solo letras y números, para no tener que codificar caracteres especiales en la URL.
+- Generá `BETTER_AUTH_SECRET` con `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+- Elegí `SEED_DOCTOR_PASSWORD` (entre 8 y 128 caracteres): es la contraseña de la cuenta de prueba.
+
+`.env` nunca se commitea.
 
 ## Base de datos
 
@@ -38,7 +47,18 @@ En `.env`, reemplazá `change-me` por una contraseña propia, tanto en `POSTGRES
 docker compose up -d   # levanta PostgreSQL en localhost:5432
 docker compose ps      # el servicio "db" debe figurar como healthy
 pnpm db:migrate        # aplica las migraciones pendientes
+pnpm db:generate       # regenera el cliente de Prisma (Prisma 7 no lo hace al migrar)
+pnpm db:seed           # crea la médica de prueba (solo desarrollo)
 ```
+
+### Cuenta de prueba
+
+No existe registro público. En desarrollo, `pnpm db:seed` crea una cuenta ficticia:
+
+- **Correo:** `medica@example.com`
+- **Contraseña:** el valor de `SEED_DOCTOR_PASSWORD` en tu `.env`
+
+El seed se niega a ejecutarse en producción y no duplica la cuenta si ya existe.
 
 Otros comandos útiles:
 
@@ -55,7 +75,7 @@ Otros comandos útiles:
 pnpm dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000) en el navegador.
+Abrí [http://localhost:3000](http://localhost:3000) en el navegador. Sin sesión, te redirige a `/login`.
 
 Para verificar la conexión con la base: [http://localhost:3000/api/health](http://localhost:3000/api/health) responde `200 {"status":"ok","database":"up"}`, o `503` si la base no está disponible.
 
@@ -68,7 +88,12 @@ Para verificar la conexión con la base: [http://localhost:3000/api/health](http
 | `pnpm start`     | Sirve la compilación de producción (requiere `pnpm build` previo). |
 | `pnpm lint`      | Analiza el código con ESLint.                                      |
 | `pnpm typecheck` | Genera los tipos de rutas de Next.js y valida TypeScript.          |
+| `pnpm test`      | Ejecuta los tests una vez (Vitest). `pnpm test:watch` los re-ejecuta al guardar. |
 | `pnpm db:migrate`| Crea (si hay cambios en el schema) y aplica migraciones en desarrollo. |
+| `pnpm db:generate`| Regenera el cliente de Prisma a partir del schema.                 |
+| `pnpm db:seed`   | Crea los datos de prueba de desarrollo.                            |
+
+> En Windows, si PowerShell bloquea `pnpm` ("running scripts is disabled"), usá `pnpm.cmd` o habilitá scripts locales con `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 ## Estructura
 
@@ -76,22 +101,32 @@ Para verificar la conexión con la base: [http://localhost:3000/api/health](http
 src/
 ├── app/               # App Router: rutas, layouts y páginas
 │   ├── layout.tsx     # Layout raíz (<html>, <body>, metadata, fuentes)
-│   ├── page.tsx       # Ruta "/" (pantalla de bienvenida)
+│   ├── page.tsx       # Ruta "/" (pantalla principal, requiere sesión)
+│   ├── login/         # Ruta "/login"
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
-│   └── api/health/    # Route Handler que verifica la conexión con la base
+│   └── api/
+│       ├── auth/      # Endpoints de Better Auth
+│       └── health/    # Route Handler que verifica la conexión con la base
 ├── components/ui/     # Componentes de shadcn/ui (código propio del proyecto)
+├── features/
+│   └── auth/          # Login: schema Zod, Server Action, formulario y sesión
 ├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
 └── lib/
+    ├── auth.ts        # Configuración de Better Auth
     ├── db.ts          # Instancia única de Prisma Client (solo servidor)
     └── utils.ts       # Helper `cn` para combinar clases
 prisma/
 ├── schema.prisma      # Modelo de datos
-└── migrations/        # Historial versionado de cambios en la base
+├── migrations/        # Historial versionado de cambios en la base
+└── seed.ts            # Datos de prueba de desarrollo
 public/                # Archivos estáticos
 components.json        # Configuración de shadcn/ui
 docker-compose.yml     # PostgreSQL local
 prisma7.config.ts      # Configuración del CLI de Prisma (lee DATABASE_URL)
+vitest.config.mts      # Configuración de los tests
 ```
+
+Los tests viven junto al código que prueban (`*.test.ts`).
 
 ## Estilos y componentes
 

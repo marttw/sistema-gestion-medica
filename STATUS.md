@@ -6,7 +6,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | --- | --- | --- | --- |
 | US-01 | SIS-8 | Inicializar proyecto Next.js con TypeScript | ✅ Mergeada (PR #1) |
 | US-02 | SIS-9 | Configurar Tailwind CSS y shadcn/ui | ✅ Mergeada (PR #2) |
-| US-03 | SIS-10 | Configurar PostgreSQL y Prisma ORM | ✅ Completa |
+| US-03 | SIS-10 | Configurar PostgreSQL y Prisma ORM | ✅ Mergeada (PR #3) |
+| US-04 | SIS-11 | Implementar login de médicos | ✅ Completa |
 
 ---
 
@@ -95,6 +96,43 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **Migración inicial vacía:** inicia el historial de migraciones sin crear tablas que después habría que borrar. Las primeras tablas reales llegan con la autenticación (US-04).
 - **`/api/health` como Route Handler:** es un endpoint HTTP que cualquier cliente puede consultar, incluidas herramientas de monitoreo. Usa `await connection()` para que Next no intente consultar la base durante el build. Ante un error devuelve 503 sin detalles internos; el error completo queda solo en el log del servidor.
 - **`db.ts` con `import "server-only"`:** si un Client Component lo importa, el build falla. Así el acceso a la base queda garantizado del lado del servidor. El patrón `globalThis` evita abrir un pool de conexiones nuevo en cada hot reload.
-- **El cliente generado no se versiona:** vive en `src/generated/prisma` (ignorado por git) y el script `postinstall` lo regenera con `prisma generate`.
+- **El cliente generado no se versiona:** vive en `src/generated/prisma` (ignorado por git) y el script `postinstall` lo regenera con `prisma generate`. Corrección posterior (US-04): en Prisma 7.10, `migrate dev` **no** regenera el cliente, así que después de migrar hay que correr `pnpm db:generate`.
 - **Se borraron las "skills" de IA que instaló `prisma init`:** las había instalado sin avisar en `.agents/`, `.claude/` y `.windsurf/`, y varias no aplicaban al proyecto.
 - **Se habilitaron los scripts de build de `prisma` y `@prisma/engines`** en `pnpm-workspace.yaml`: descargan el binario que ejecuta las migraciones. Los de `sharp` y `unrs-resolver` siguen bloqueados porque no son necesarios.
+
+---
+
+## US-04: Implementar login de médicos
+
+**Fecha:** 2026-11-05
+
+### Qué se hizo
+
+- Se integró **Better Auth 1.7.17** con el adaptador de Prisma, login por email y contraseña, y el registro público desactivado (`disableSignUp`).
+- Se crearon las tablas de autenticación (`user`, `session`, `account`, `verification`) con la migración `add_better_auth`.
+- Se creó la pantalla `/login`, con un formulario hecho con React Hook Form y Zod, y una Server Action `login` que valida de nuevo en el servidor.
+- La pantalla principal `/` saluda al médico autenticado y redirige a `/login` si no hay sesión. `/login` redirige a `/` si ya hay sesión.
+- Se agregó `pnpm db:seed`, que crea a la médica ficticia "Dra. Ana Pérez" (`medica@example.com`) solo en desarrollo.
+- Se configuró **Vitest** con 11 tests: 6 para el schema y 5 para la Server Action.
+
+### Herramientas y para qué las usamos
+
+- **Better Auth:** biblioteca de autenticación. Hashea las contraseñas (scrypt), crea y valida las sesiones, emite la cookie y aplica rate limiting. Nosotros nunca guardamos contraseñas ni generamos tokens a mano.
+- **Sesiones en base de datos:** al iniciar sesión, Better Auth guarda una fila en `session` y envía al navegador solo un token aleatorio en una cookie `HttpOnly` (JavaScript no la puede leer) y `SameSite=Lax` (protege contra CSRF), válida por 7 días. En producción, con HTTPS, además la marca como `Secure`. En cada request, el servidor busca ese token en la base.
+- **Zod:** define el schema de validación una sola vez. Lo usa el formulario, para dar feedback inmediato, y la Server Action, como validación real, porque al servidor nunca le alcanza con lo que validó el cliente.
+- **React Hook Form:** maneja el estado del formulario y los errores por campo con pocos re-renders. Se conecta con Zod mediante `@hookform/resolvers`.
+- **Server Actions:** funciones `"use server"` que el formulario llama como si fueran funciones comunes; Next las convierte en un POST al servidor. El plugin `nextCookies()` de Better Auth permite que una Server Action escriba la cookie de sesión.
+- **Vitest:** test runner compatible con Vite. Los tests de la Server Action reemplazan Better Auth, `headers()` y `redirect()` con mocks (`vi.mock`), para probar la lógica sin base de datos.
+- **`tsx`:** ejecuta TypeScript directamente en Node. Lo usamos para el seed.
+
+### Decisiones
+
+- **Un mismo mensaje de error para "usuario inexistente" y "contraseña incorrecta"** ("Correo electrónico o contraseña incorrectos."). Así nadie puede averiguar qué correos están registrados (*user enumeration*). El rate limiting (429) tiene su propio mensaje, porque no revela nada. Los errores inesperados se registran en el log del servidor y el usuario ve un mensaje genérico.
+- **La sesión se lee dentro de `<Suspense>`:** con Cache Components, leer cookies o headers fuera de `<Suspense>` es un error de build. Por eso `/` y `/login` son *Partial Prerender*: una cáscara estática que carga al instante, más una parte dinámica que lee la sesión. Las redirecciones desde esa parte llegan por el stream (HTTP 200 con redirect en el cliente), no como un 307.
+- **`getSession()` en `src/features/auth/session.ts`:** es el único punto desde el que se lee la sesión, el inicio de una "Data Access Layer". La US-05 lo va a usar para proteger todas las rutas y operaciones.
+- **Seed con la API interna de Better Auth** (`ctx.password.hash` + `internalAdapter`): crea el usuario con el mismo hashing y el mismo formato que usaría el registro, sin habilitar un endpoint público. La contraseña sale de `SEED_DOCTOR_PASSWORD` (en `.env`), y el seed se niega a correr en producción y no duplica la cuenta.
+- **Better Auth 1.7.17 en lugar de 1.7.18:** la 1.7.18 se había publicado hacía horas, y pnpm 11 bloquea versiones con menos de 24 h (protección de cadena de suministro). En lugar de agregar excepciones, usamos la versión anterior. Para destrabar el lockfile hubo que restaurarlo desde `main`, porque pnpm lo verifica antes de modificarlo.
+- **Modelos de auth escritos a mano:** el CLI de Better Auth (`auth generate`) se niega a cargar configuraciones que importan `server-only`, aunque sea de forma indirecta. Los modelos se tomaron de la definición del propio paquete instalado (`getAuthTables`) y se pasaron a Prisma con las convenciones de su generador.
+- **`server-only` instalado como paquete:** Next lo resuelve solo, pero los scripts que corren fuera de Next (el seed) lo necesitan. Se ejecutan con la condición `--conditions=react-server`, que hace que `server-only` no falle. `auth.ts` no lo importa directamente (por el CLI), pero queda protegido porque importa `db.ts`, que sí lo hace.
+- **`vitest.config.mts`:** la extensión `.mts` marca la configuración como ESM y evita un aviso de Vite.
+- **Fuera de alcance:** logout, protección general de rutas y `proxy.ts` (US-05). Hasta entonces, para probar el login otra vez hay que borrar la cookie `better-auth.session_token` desde DevTools.
