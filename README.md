@@ -11,6 +11,7 @@ Aplicación web multiusuario para que médicos gestionen a sus pacientes. Proyec
 - TypeScript (modo `strict`)
 - Tailwind CSS 4
 - shadcn/ui sobre Base UI
+- PostgreSQL 17 (Docker) + Prisma ORM 7
 - ESLint (`eslint-config-next`)
 - pnpm
 
@@ -18,14 +19,35 @@ Aplicación web multiusuario para que médicos gestionen a sus pacientes. Proyec
 
 - Node.js **20.9 o superior**
 - pnpm **11** (la versión exacta está en el campo `packageManager` de `package.json`). Con Corepack: `corepack enable`.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (en Windows, con WSL 2) para la base de datos local.
 
 ## Instalación
 
 ```bash
 git clone https://github.com/marttw/sistema-gestion-medica.git
 cd sistema-gestion-medica
-pnpm install
+pnpm install          # también genera el cliente de Prisma (postinstall)
+cp .env.example .env  # completar con valores propios
 ```
+
+En `.env`, reemplazá `change-me` por una contraseña propia, tanto en `POSTGRES_PASSWORD` como dentro de `DATABASE_URL`. Usá solo letras y números, para no tener que codificar caracteres especiales en la URL. `.env` nunca se commitea.
+
+## Base de datos
+
+```bash
+docker compose up -d   # levanta PostgreSQL en localhost:5432
+docker compose ps      # el servicio "db" debe figurar como healthy
+pnpm db:migrate        # aplica las migraciones pendientes
+```
+
+Otros comandos útiles:
+
+| Comando                      | Descripción                                                  |
+| ---------------------------- | ------------------------------------------------------------ |
+| `docker compose stop`        | Detiene la base (los datos se conservan).                    |
+| `docker compose down -v`     | Elimina el contenedor **y los datos** (volumen).             |
+| `pnpm prisma migrate status` | Muestra si la base está al día con las migraciones.          |
+| `pnpm prisma studio`         | Abre una interfaz web para explorar los datos.               |
 
 ## Ejecución
 
@@ -34,6 +56,8 @@ pnpm dev
 ```
 
 Abrí [http://localhost:3000](http://localhost:3000) en el navegador.
+
+Para verificar la conexión con la base: [http://localhost:3000/api/health](http://localhost:3000/api/health) responde `200 {"status":"ok","database":"up"}`, o `503` si la base no está disponible.
 
 ## Scripts
 
@@ -44,6 +68,7 @@ Abrí [http://localhost:3000](http://localhost:3000) en el navegador.
 | `pnpm start`     | Sirve la compilación de producción (requiere `pnpm build` previo). |
 | `pnpm lint`      | Analiza el código con ESLint.                                      |
 | `pnpm typecheck` | Genera los tipos de rutas de Next.js y valida TypeScript.          |
+| `pnpm db:migrate`| Crea (si hay cambios en el schema) y aplica migraciones en desarrollo. |
 
 ## Estructura
 
@@ -52,11 +77,20 @@ src/
 ├── app/               # App Router: rutas, layouts y páginas
 │   ├── layout.tsx     # Layout raíz (<html>, <body>, metadata, fuentes)
 │   ├── page.tsx       # Ruta "/" (pantalla de bienvenida)
-│   └── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
+│   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
+│   └── api/health/    # Route Handler que verifica la conexión con la base
 ├── components/ui/     # Componentes de shadcn/ui (código propio del proyecto)
-└── lib/utils.ts       # Helper `cn` para combinar clases
+├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
+└── lib/
+    ├── db.ts          # Instancia única de Prisma Client (solo servidor)
+    └── utils.ts       # Helper `cn` para combinar clases
+prisma/
+├── schema.prisma      # Modelo de datos
+└── migrations/        # Historial versionado de cambios en la base
 public/                # Archivos estáticos
 components.json        # Configuración de shadcn/ui
+docker-compose.yml     # PostgreSQL local
+prisma7.config.ts      # Configuración del CLI de Prisma (lee DATABASE_URL)
 ```
 
 ## Estilos y componentes
