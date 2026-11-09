@@ -7,7 +7,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-01 | SIS-8 | Inicializar proyecto Next.js con TypeScript | ✅ Mergeada (PR #1) |
 | US-02 | SIS-9 | Configurar Tailwind CSS y shadcn/ui | ✅ Mergeada (PR #2) |
 | US-03 | SIS-10 | Configurar PostgreSQL y Prisma ORM | ✅ Mergeada (PR #3) |
-| US-04 | SIS-11 | Implementar login de médicos | ✅ Completa |
+| US-04 | SIS-11 | Implementar login de médicos | ✅ Mergeada (PR #4) |
+| US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Completa |
 
 ---
 
@@ -136,3 +137,41 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **`server-only` instalado como paquete:** Next lo resuelve solo, pero los scripts que corren fuera de Next (el seed) lo necesitan. Se ejecutan con la condición `--conditions=react-server`, que hace que `server-only` no falle. `auth.ts` no lo importa directamente (por el CLI), pero queda protegido porque importa `db.ts`, que sí lo hace.
 - **`vitest.config.mts`:** la extensión `.mts` marca la configuración como ESM y evita un aviso de Vite.
 - **Fuera de alcance:** logout, protección general de rutas y `proxy.ts` (US-05). Hasta entonces, para probar el login otra vez hay que borrar la cookie `better-auth.session_token` desde DevTools.
+
+---
+
+## US-05: Proteger rutas privadas e implementar logout
+
+**Fecha:** 2026-11-06
+
+### Qué se hizo
+
+- Se separó la protección en dos capas:
+  - **Control optimista:** `src/proxy.ts` revisa que exista la cookie de sesión y, si no está, responde con un 307 a `/login`.
+  - **Control seguro:** `requireSession()` (en `src/features/auth/session.ts`) valida la sesión contra la base de datos.
+- Se creó el route group `src/app/(private)/`. Todas las páginas que viven ahí comparten un layout con un encabezado que muestra el nombre del médico y el botón "Cerrar sesión". La página principal se movió adentro y su URL sigue siendo `/`.
+- Se agregó la Server Action `logout`: borra la sesión de la base y la cookie, y redirige a `/login`.
+- Se agregaron estados de carga: skeletons de shadcn mientras se valida la sesión, y "Cerrando sesión…" durante el logout.
+- Se agregaron 8 tests (19 en total): `requireSession`, `logout` y el proxy (redirecciones y `matcher`).
+
+### Herramientas y para qué las usamos
+
+- **`proxy.ts`** (en versiones anteriores de Next se llamaba `middleware.ts`): código que corre antes de cada request que coincide con su `matcher`. Lo usamos solo para la redirección rápida. No consulta la base porque se ejecuta en cada navegación y en cada *prefetch*.
+- **`getSessionCookie()`** de `better-auth/cookies`: lee la cookie de sesión sin validarla. Sirve para el proxy, nunca para autorizar.
+- **`auth.api.getSession()`:** busca el token en la tabla `session` y descarta las sesiones vencidas o cerradas. Es la verificación real.
+- **`cache()` de React:** si el layout y la página piden la sesión en el mismo render, la base se consulta una sola vez.
+- **Route groups (`(private)`):** carpetas entre paréntesis que agrupan rutas y les dan un layout común, sin agregar un segmento a la URL.
+- **`useActionState`:** conecta un `<form action>` con una Server Action. Da `isPending` y el valor que devuelve la acción (para mostrar errores). Además, el formulario funciona aunque JavaScript todavía no haya cargado.
+- **`next/experimental/testing/server`:** utilidades oficiales para testear el proxy y su `matcher`.
+
+### Decisiones
+
+- **El proxy no alcanza para proteger:** acepta cualquier cookie con el nombre correcto, incluso una inventada. Por eso cada página, Server Action y Route Handler privado llama a `requireSession()`. Los tests e2e lo comprueban: una cookie falsificada pasa el proxy, pero `requireSession()` la rechaza.
+- **El proxy no redirige `/login` → `/` aunque haya cookie:** si la cookie es de una sesión vencida, `/` mandaría de vuelta a `/login` y se produciría un bucle infinito. Ese caso lo resuelve `/login` en el servidor, consultando la base.
+- **El `matcher` excluye `/api`, `_next` y los archivos estáticos:** las APIs se autorizan por su cuenta y los recursos estáticos no deben bloquearse. Las Server Actions se envían como POST a la página donde se usan, así que el proxy también corre para ellas, pero igual validan la sesión por su cuenta.
+- **`requireSession()` devuelve un DTO `{ id, name, email }`:** el resto de la app nunca recibe el token ni la sesión completa.
+- **El logout invalida la sesión en el servidor:** como las sesiones viven en la base, `signOut` borra la fila y la cookie anterior deja de servir al instante, en cualquier navegador. Con un JWT autocontenido esto no sería posible sin una lista de revocación.
+- **Sesiones expiradas:** Better Auth ignora las sesiones cuyo `expiresAt` ya pasó, así que `requireSession()` redirige al login sin código adicional.
+- **`useActionState` en lugar de `useFormStatus`:** además del estado de carga, permite mostrar un error si el logout falla. En ese caso el mensaje es genérico y el detalle queda solo en el log del servidor.
+- **La sesión no se lee en el nivel superior del layout:** si lo hiciera, toda la página esperaría a la base. El nombre del médico se carga dentro de `<Suspense>`, como recomienda la guía de Cache Components.
+- **`unstable_doesMiddlewareMatch`:** la documentación de Next 16.4.5 la llama `unstable_doesProxyMatch`, pero el paquete todavía la exporta con el nombre viejo.
