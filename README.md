@@ -75,7 +75,7 @@ Otros comandos útiles:
 pnpm dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000) en el navegador. Sin sesión, te redirige a `/login`.
+Abrí [http://localhost:3000](http://localhost:3000) en el navegador. Sin sesión, te redirige a `/login`. Una vez dentro, el botón **Cerrar sesión** del encabezado cierra la sesión.
 
 Para verificar la conexión con la base: [http://localhost:3000/api/health](http://localhost:3000/api/health) responde `200 {"status":"ok","database":"up"}`, o `503` si la base no está disponible.
 
@@ -101,16 +101,19 @@ Para verificar la conexión con la base: [http://localhost:3000/api/health](http
 src/
 ├── app/               # App Router: rutas, layouts y páginas
 │   ├── layout.tsx     # Layout raíz (<html>, <body>, metadata, fuentes)
-│   ├── page.tsx       # Ruta "/" (pantalla principal, requiere sesión)
-│   ├── login/         # Ruta "/login"
+│   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
+│   │   ├── layout.tsx # Encabezado con el médico y "Cerrar sesión"
+│   │   └── page.tsx   # Ruta "/" (pantalla principal)
+│   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
 │       ├── auth/      # Endpoints de Better Auth
 │       └── health/    # Route Handler que verifica la conexión con la base
 ├── components/ui/     # Componentes de shadcn/ui (código propio del proyecto)
 ├── features/
-│   └── auth/          # Login: schema Zod, Server Action, formulario y sesión
+│   └── auth/          # Login, logout y acceso a la sesión (requireSession)
 ├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
+├── proxy.ts           # Redirección rápida al login si no hay cookie de sesión
 └── lib/
     ├── auth.ts        # Configuración de Better Auth
     ├── db.ts          # Instancia única de Prisma Client (solo servidor)
@@ -127,6 +130,15 @@ vitest.config.mts      # Configuración de los tests
 ```
 
 Los tests viven junto al código que prueban (`*.test.ts`).
+
+## Rutas privadas y autorización
+
+La protección tiene dos capas:
+
+1. **`src/proxy.ts` (control optimista):** si no hay cookie de sesión, redirige a `/login` antes de renderizar. Es rápido, pero no consulta la base, así que acepta cualquier cookie.
+2. **`requireSession()` (control seguro):** valida la sesión contra la base (que exista, que no haya vencido y que no se haya cerrado). Si no es válida, redirige a `/login`. Si lo es, devuelve `{ id, name, email }` del médico.
+
+**Regla:** toda página, Server Action o Route Handler privado debe llamar a `requireSession()` (de `@/features/auth/session`) antes de leer o modificar datos. Las páginas nuevas que requieren sesión van dentro de `src/app/(private)/`.
 
 ## Estilos y componentes
 
