@@ -8,7 +8,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-02 | SIS-9 | Configurar Tailwind CSS y shadcn/ui | ✅ Mergeada (PR #2) |
 | US-03 | SIS-10 | Configurar PostgreSQL y Prisma ORM | ✅ Mergeada (PR #3) |
 | US-04 | SIS-11 | Implementar login de médicos | ✅ Mergeada (PR #4) |
-| US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Completa |
+| US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Mergeada (PR #5) |
+| US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Completa |
 
 ---
 
@@ -175,3 +176,50 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **`useActionState` en lugar de `useFormStatus`:** además del estado de carga, permite mostrar un error si el logout falla. En ese caso el mensaje es genérico y el detalle queda solo en el log del servidor.
 - **La sesión no se lee en el nivel superior del layout:** si lo hiciera, toda la página esperaría a la base. El nombre del médico se carga dentro de `<Suspense>`, como recomienda la guía de Cache Components.
 - **`unstable_doesMiddlewareMatch`:** la documentación de Next 16.4.5 la llama `unstable_doesProxyMatch`, pero el paquete todavía la exporta con el nombre viejo.
+
+---
+
+## US-06: Crear layout principal y menú de navegación
+
+**Fecha:** 2026-11-09
+
+### Qué se hizo
+
+- Se armó el layout privado (`src/app/(private)/layout.tsx`):
+  - Un menú lateral, que en escritorio se colapsa a íconos y en móvil se convierte en un panel deslizable.
+  - Un header con el nombre y el email del médico, y el botón "Cerrar sesión".
+  - El área de contenido.
+- El menú tiene una sola opción, "Pacientes", y marca la sección activa (también en sus subrutas).
+- Se creó `/patients` como página placeholder ("Próximamente"). La US-07 la va a reemplazar por el ABM.
+- La pantalla principal muestra un mensaje de bienvenida que invita a usar el menú.
+- Cada página define su título, y un *template* agrega el nombre del sistema: "Pacientes | Sistema de Gestión Médica".
+- Se agregaron 5 tests (24 en total) para la configuración del menú y la lógica de "sección activa".
+
+### Herramientas y para qué las usamos
+
+- **Sidebar de shadcn/ui** (`pnpm dlx shadcn@latest add sidebar`): resuelve el menú lateral, el colapso, el atajo `Ctrl+B`, el panel móvil (un `Sheet`) y la accesibilidad. Además agregó `sheet`, `tooltip` y el hook `useIsMobile`.
+- **Layouts anidados:** el layout raíz envuelve al layout privado, y este a cada página. El layout privado persiste entre navegaciones: al ir de `/` a `/patients`, solo se reemplaza el contenido; el menú y el header no se vuelven a montar.
+- **`usePathname()`:** hook de Next que devuelve la URL actual. Lo usa `NavMain` para marcar la sección activa. Por eso es el único componente del menú que es Client Component.
+- **Prop `render` de Base UI:** permite que `SidebarMenuButton` se renderice como un `<Link>` de Next, con los estilos del menú y la navegación del lado del cliente. Es el equivalente a `asChild` de Radix.
+- **`useSyncExternalStore`:** API de React para suscribirse a una fuente externa (acá, el media query del ancho de la pantalla).
+- **`metadata.title.template`:** cada página define solo su nombre ("Pacientes"), y el layout raíz agrega el resto.
+
+### Decisiones
+
+- **El menú se define como datos:** `NAV_ITEMS`, en `src/components/layout/navigation.ts`, es la única fuente de las secciones. Agregar un módulo es agregar una entrada; no hay que tocar el layout ni el sidebar.
+- **Separación de responsabilidades:**
+  - `navigation.ts` define *qué* secciones hay.
+  - `NavMain` decide *cuál* está activa.
+  - `AppSidebar` y `AppHeader` arman la interfaz.
+  - El layout solo compone las piezas.
+  - Las páginas tienen el contenido.
+
+  Ninguna de estas piezas sabe nada de pacientes.
+- **`isActivePath` compara contra `href + "/"`:** un simple `startsWith("/patients")` también marcaría una ruta hermana como `/patients-archive`.
+- **Placeholder en `/patients`:** permite probar la navegación y el menú activo de verdad, sin adelantar lógica de la US-07. Igual llama a `requireSession()`, como toda página privada.
+- **`useIsMobile` reescrito con `useSyncExternalStore`:** la versión generada por shadcn hacía `setState` dentro de un `useEffect`, y ESLint (`react-hooks/set-state-in-effect`) lo marcó como error porque provoca renders en cascada. En el servidor asume escritorio, y el CSS oculta el menú de escritorio en móvil hasta que el cliente toma el control.
+- **Textos de accesibilidad en español:** se tradujeron los textos para lectores de pantalla que shadcn trae en inglés ("Toggle Sidebar", "Sidebar").
+- **Botón propio para colapsar el menú en escritorio** (`SidebarCollapseButton`): un botón circular en el borde del sidebar, con una flecha que indica hacia dónde se mueve (`‹` contraer, `›` expandir). Reemplaza al ícono de panel del header, que no comunicaba bien la acción. Cambia `aria-label` y `aria-expanded` según el estado. En móvil no se muestra: ahí el menú se abre con el botón del header, que solo aparece en pantallas chicas.
+- **`SidebarInset` provee el `<main>`:** las páginas privadas usan un `<div>` como raíz, para no anidar dos `<main>`, que es HTML inválido.
+- **El estado del menú (abierto o colapsado) no se recuerda entre visitas:** el Sidebar lo guarda en la cookie `sidebar_state`, pero para leerla habría que llamar a `cookies()` en el layout, lo que con Cache Components bloquearía toda la página. Siempre arranca expandido.
+- **Servidores de prueba huérfanos:** al detener los `next start` de las pruebas de la US-05, el proceso de Node quedó vivo y seguía sirviendo el build viejo. Ahora el servidor se lanza con `exec` para que, al detenerlo, se cierre el proceso de Node.
