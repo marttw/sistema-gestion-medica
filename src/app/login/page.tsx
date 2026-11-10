@@ -13,7 +13,7 @@ import { LoginForm } from "@/features/auth/components/login-form";
 import { getSession } from "@/features/auth/session";
 
 export const metadata: Metadata = {
-  title: "Iniciar sesión | Sistema de Gestión Médica",
+  title: "Iniciar sesión",
 };
 
 export default function LoginPage() {

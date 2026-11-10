@@ -1,16 +1,22 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/features/auth/session";
 
+export const metadata: Metadata = {
+  title: "Inicio",
+};
+
 export default function HomePage() {
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+    // The private layout already provides the <main> element.
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
       {/* Reads the session at request time, so it must sit inside Suspense. */}
       <Suspense fallback={<WelcomeSkeleton />}>
         <Welcome />
       </Suspense>
-    </main>
+    </div>
   );
 }
 
@@ -24,8 +30,8 @@ async function Welcome() {
         Hola, {user.name}
       </h1>
       <p className="max-w-xl text-muted-foreground sm:text-lg">
-        Iniciaste sesión como {user.email}. Pronto vas a poder administrar a
-        tus pacientes desde acá.
+        Te damos la bienvenida al Sistema de Gestión Médica. Usá el menú para
+        acceder a tus pacientes.
       </p>
     </>
   );

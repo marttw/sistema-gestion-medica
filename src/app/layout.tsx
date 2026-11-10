@@ -13,7 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sistema de Gestión Médica",
+  // Pages set only their own name; the template appends the app name.
+  title: {
+    default: "Sistema de Gestión Médica",
+    template: "%s | Sistema de Gestión Médica",
+  },
   description: "Gestión de pacientes para médicos.",
 };
 

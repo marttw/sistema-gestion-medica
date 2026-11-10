@@ -102,17 +102,21 @@ src/
 ├── app/               # App Router: rutas, layouts y páginas
 │   ├── layout.tsx     # Layout raíz (<html>, <body>, metadata, fuentes)
 │   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
-│   │   ├── layout.tsx # Encabezado con el médico y "Cerrar sesión"
-│   │   └── page.tsx   # Ruta "/" (pantalla principal)
+│   │   ├── layout.tsx # Layout privado: menú lateral + header + contenido
+│   │   ├── page.tsx   # Ruta "/" (bienvenida)
+│   │   └── patients/  # Ruta "/patients" (por ahora, placeholder)
 │   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
 │       ├── auth/      # Endpoints de Better Auth
 │       └── health/    # Route Handler que verifica la conexión con la base
-├── components/ui/     # Componentes de shadcn/ui (código propio del proyecto)
+├── components/
+│   ├── layout/        # Menú lateral, header y configuración de la navegación
+│   └── ui/            # Componentes de shadcn/ui (código propio del proyecto)
 ├── features/
 │   └── auth/          # Login, logout y acceso a la sesión (requireSession)
 ├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
+├── hooks/             # Hooks de React compartidos (p. ej., useIsMobile)
 ├── proxy.ts           # Redirección rápida al login si no hay cookie de sesión
 └── lib/
     ├── auth.ts        # Configuración de Better Auth
@@ -139,6 +143,21 @@ La protección tiene dos capas:
 2. **`requireSession()` (control seguro):** valida la sesión contra la base (que exista, que no haya vencido y que no se haya cerrado). Si no es válida, redirige a `/login`. Si lo es, devuelve `{ id, name, email }` del médico.
 
 **Regla:** toda página, Server Action o Route Handler privado debe llamar a `requireSession()` (de `@/features/auth/session`) antes de leer o modificar datos. Las páginas nuevas que requieren sesión van dentro de `src/app/(private)/`.
+
+## Navegación
+
+El área privada comparte un layout (`src/app/(private)/layout.tsx`):
+
+- Un menú lateral, que en escritorio se puede colapsar a íconos (`Ctrl+B`) y en móvil se abre como panel deslizable.
+- Un header con el médico autenticado y el botón para cerrar sesión.
+- El área de contenido.
+
+Para agregar una sección al menú:
+
+1. Creá la página dentro de `src/app/(private)/` (por ejemplo `src/app/(private)/turnos/page.tsx`) y validá la sesión con `requireSession()`.
+2. Agregá una entrada en `NAV_ITEMS` (`src/components/layout/navigation.ts`) con el título, la ruta y un ícono de `lucide-react`.
+
+El menú marca la sección activa automáticamente, también en sus subrutas (por ejemplo `/patients/123`).
 
 ## Estilos y componentes
 
