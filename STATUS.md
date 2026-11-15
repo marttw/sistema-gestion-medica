@@ -9,7 +9,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-03 | SIS-10 | Configurar PostgreSQL y Prisma ORM | ✅ Mergeada (PR #3) |
 | US-04 | SIS-11 | Implementar login de médicos | ✅ Mergeada (PR #4) |
 | US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Mergeada (PR #5) |
-| US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Completa |
+| US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Mergeada (PR #6) |
+| US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Completa |
 
 ---
 
@@ -223,3 +224,52 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **`SidebarInset` provee el `<main>`:** las páginas privadas usan un `<div>` como raíz, para no anidar dos `<main>`, que es HTML inválido.
 - **El estado del menú (abierto o colapsado) no se recuerda entre visitas:** el Sidebar lo guarda en la cookie `sidebar_state`, pero para leerla habría que llamar a `cookies()` en el layout, lo que con Cache Components bloquearía toda la página. Siempre arranca expandido.
 - **Servidores de prueba huérfanos:** al detener los `next start` de las pruebas de la US-05, el proceso de Node quedó vivo y seguía sirviendo el build viejo. Ahora el servidor se lanza con `exec` para que, al detenerlo, se cierre el proceso de Node.
+
+---
+
+## US-07: Crear modelo y listado de pacientes
+
+**Fecha:** 2026-11-11
+
+### Qué se hizo
+
+- Se creó el modelo `Patient` con la migración `add_patient`.
+  - **Obligatorios:** nombre, apellido, DNI y fecha de nacimiento.
+  - **Opcionales:** teléfono, email, cobertura (obra social o prepaga) y número de afiliado.
+  - Cada paciente pertenece obligatoriamente a un médico (`doctorId`, con clave foránea a `user`).
+- Se creó la capa de datos de pacientes en `src/features/patients/`:
+  - `repository.ts`: la consulta Prisma.
+  - `queries.ts`: `getMyPatients()`, que toma al médico de la sesión.
+  - `utils.ts`: formato de fechas, edad y DNI.
+- Se reemplazó el placeholder de `/patients` por el listado real:
+  - Una tabla en escritorio y tarjetas en celular.
+  - Un contador de pacientes y un skeleton mientras carga.
+  - Un estado vacío y un estado de error con un botón "Reintentar" (`error.tsx`).
+- El seed ahora crea tres médicos ficticios: Ana con 8 pacientes, Bruno con 3 y Carla sin pacientes. Sirven para probar el aislamiento entre médicos y el estado vacío.
+- La base de desarrollo se recreó con ICU en español para ordenar bien los apellidos.
+- Se agregaron 14 tests (38 en total): utilidades, consultas y repositorio.
+
+### Herramientas y para qué las usamos
+
+- **Relaciones de Prisma (`@relation`):** `Patient.doctor` y `User.patients` describen la relación 1:N (un médico, muchos pacientes). Prisma genera la clave foránea, y PostgreSQL garantiza que cada paciente apunte a un médico existente.
+- **`select` de Prisma + DTO (`PatientListItem`):** la consulta trae solo las columnas que muestra el listado. `satisfies Prisma.PatientSelect` valida la forma contra los tipos generados.
+- **Índices compuestos:** `@@unique([doctorId, documentNumber])` y `@@index([doctorId, lastName, firstName])`.
+- **`error.tsx`:** un *error boundary* de Next. Si la página falla al renderizar, muestra este componente en lugar de la página, mientras el menú y el header siguen visibles. `retry()` vuelve a pedir los datos al servidor.
+- **`unstable_rethrow`:** dentro de un `try/catch`, vuelve a lanzar los errores internos de Next (como el de `redirect()`) para no romper la redirección al login.
+- **Componentes `Table` y `Empty` de shadcn/ui:** la tabla del listado y los estados vacío y de error.
+- **ICU (International Components for Unicode):** la biblioteca que usa PostgreSQL para ordenar y comparar texto según las reglas de un idioma.
+
+### Decisiones
+
+- **El DNI se guarda como texto:** es un identificador, no una cantidad. No se hacen cuentas con él, y como texto conserva los ceros a la izquierda. Se guarda sin puntos y se formatea al mostrarlo (`30.111.222`).
+- **`@@unique([doctorId, documentNumber])` y no un DNI único global:** los pacientes no se comparten. Si dos médicos atienden a la misma persona, cada uno tiene su propio registro; lo que no se permite es que un mismo médico la cargue dos veces.
+- **`onDelete: Restrict`:** PostgreSQL impide borrar un médico que tiene pacientes. Con `Cascade`, eliminar un usuario borraría sus pacientes sin aviso.
+- **`birthDate` es `@db.Date`:** una fecha de nacimiento no tiene hora. Prisma la devuelve como medianoche UTC, así que se formatea y se calcula la edad en UTC. En hora de Argentina (UTC-3) esa medianoche todavía es el día anterior.
+- **ID con UUID v7** (`@default(uuid(7))`): no es adivinable como un autoincremental, y como está ordenado por tiempo, las filas nuevas se insertan al final del índice. Lo genera Prisma Client, no la base.
+- **El índice `[doctorId, lastName, firstName]` sigue la forma de la consulta:** filtra por médico y ordena por apellido y nombre, así PostgreSQL puede leer las filas ya ordenadas.
+- **Repositorio y consultas separados:** el repositorio confía en el `doctorId` que recibe. Por eso solo lo llama `getMyPatients()`, que no acepta parámetros y obtiene el ID de la sesión. No hay ningún camino desde el navegador para pedir los pacientes de otro médico.
+- **Lectura con un Server Component:** el listado se consulta en el servidor y al navegador llega HTML. No hace falta un endpoint de API ni JavaScript para obtener los datos.
+- **Base caída ≠ "sin sesión":** si PostgreSQL no responde, Better Auth lanza un error (no devuelve `null`), así que no se manda al médico al login por error. El detalle (`ECONNREFUSED`) queda solo en el log del servidor; el navegador recibe un mensaje genérico y un código de referencia (`digest`).
+- **El header tolera errores:** el nombre del médico se carga en el layout, que `patients/error.tsx` no cubre. Si esa consulta falla, el header se muestra sin el nombre, en lugar de que toda la pantalla termine en el error genérico de Next.
+- **Base con ICU `es-AR`:** la imagen `postgres:17-alpine` usa musl, que no implementa el orden por idioma, y ordenaba por bytes ("Álvarez" quedaba después de "Sánchez"). Se agregó `POSTGRES_INITDB_ARGS="--locale-provider=icu --icu-locale=es-AR"` en `docker-compose.yml` y se recreó el volumen. Ordenar en TypeScript se descartó porque deja de servir cuando la base pagine (US-12).
+- **Sin React Testing Library ni tests de integración todavía:** los componentes y el aislamiento contra una base real se verificaron con pruebas e2e manuales con los tres médicos. Los tests de interfaz y de integración quedan para la US-13.

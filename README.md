@@ -48,17 +48,22 @@ docker compose up -d   # levanta PostgreSQL en localhost:5432
 docker compose ps      # el servicio "db" debe figurar como healthy
 pnpm db:migrate        # aplica las migraciones pendientes
 pnpm db:generate       # regenera el cliente de Prisma (Prisma 7 no lo hace al migrar)
-pnpm db:seed           # crea la médica de prueba (solo desarrollo)
+pnpm db:seed           # crea médicos y pacientes ficticios (solo desarrollo)
 ```
 
-### Cuenta de prueba
+La base se crea con ICU en español (`es-AR`), para que el texto se ordene correctamente ("Álvarez" antes que "Díaz"). Esa configuración se aplica solo cuando se crea el volumen. Si tu base es anterior a la US-07, recreala: `docker compose down -v`, `docker compose up -d`, `pnpm db:migrate` y `pnpm db:seed`.
 
-No existe registro público. En desarrollo, `pnpm db:seed` crea una cuenta ficticia:
+### Cuentas de prueba
 
-- **Correo:** `medica@example.com`
-- **Contraseña:** el valor de `SEED_DOCTOR_PASSWORD` en tu `.env`
+No existe registro público. En desarrollo, `pnpm db:seed` crea tres cuentas ficticias. Todas usan como contraseña el valor de `SEED_DOCTOR_PASSWORD` de tu `.env`.
 
-El seed se niega a ejecutarse en producción y no duplica la cuenta si ya existe.
+| Correo                | Médico          | Pacientes                       |
+| --------------------- | --------------- | ------------------------------- |
+| `medica@example.com`  | Dra. Ana Pérez  | 8                               |
+| `medico2@example.com` | Dr. Bruno Gómez | 3 (distintos a los de Ana)      |
+| `medica3@example.com` | Dra. Carla Ruiz | Ninguno (muestra el estado vacío) |
+
+El seed se niega a ejecutarse en producción y se puede correr varias veces: reutiliza las cuentas existentes y actualiza los pacientes sin duplicarlos.
 
 Otros comandos útiles:
 
@@ -104,7 +109,7 @@ src/
 │   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
 │   │   ├── layout.tsx # Layout privado: menú lateral + header + contenido
 │   │   ├── page.tsx   # Ruta "/" (bienvenida)
-│   │   └── patients/  # Ruta "/patients" (por ahora, placeholder)
+│   │   └── patients/  # Ruta "/patients": listado y su estado de error (error.tsx)
 │   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
@@ -114,7 +119,8 @@ src/
 │   ├── layout/        # Menú lateral, header y configuración de la navegación
 │   └── ui/            # Componentes de shadcn/ui (código propio del proyecto)
 ├── features/
-│   └── auth/          # Login, logout y acceso a la sesión (requireSession)
+│   ├── auth/          # Login, logout y acceso a la sesión (requireSession)
+│   └── patients/      # Pacientes: repositorio, consultas, utilidades y componentes
 ├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
 ├── hooks/             # Hooks de React compartidos (p. ej., useIsMobile)
 ├── proxy.ts           # Redirección rápida al login si no hay cookie de sesión
@@ -143,6 +149,15 @@ La protección tiene dos capas:
 2. **`requireSession()` (control seguro):** valida la sesión contra la base (que exista, que no haya vencido y que no se haya cerrado). Si no es válida, redirige a `/login`. Si lo es, devuelve `{ id, name, email }` del médico.
 
 **Regla:** toda página, Server Action o Route Handler privado debe llamar a `requireSession()` (de `@/features/auth/session`) antes de leer o modificar datos. Las páginas nuevas que requieren sesión van dentro de `src/app/(private)/`.
+
+## Acceso a datos
+
+Cada dominio separa el acceso a datos en dos capas (por ejemplo, en `src/features/patients/`):
+
+- **`repository.ts`:** solo consultas Prisma. Recibe el ID del médico como parámetro y lo usa en el filtro.
+- **`queries.ts`:** lo que llaman las páginas. **No recibe IDs**: obtiene al médico con `requireSession()` y le pasa su ID al repositorio.
+
+Así, la identidad del médico siempre sale de la sesión del servidor y nunca de datos enviados por el navegador, y cada médico solo ve sus propios pacientes.
 
 ## Navegación
 

@@ -27,6 +27,7 @@ model User {
   updatedAt     DateTime  @default(now()) @updatedAt
   sessions      Session[]
   accounts      Account[]
+  patients      Patient[]
 
   @@map("user")
 }
@@ -80,4 +81,38 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Patients (administrative data only: no clinical information).
+// ---------------------------------------------------------------------------
+
+// A patient always belongs to exactly one doctor (User). Patients are never
+// shared: two doctors treating the same person each keep their own record.
+model Patient {
+  // UUID v7: random but time-ordered, so new rows land at the end of the index.
+  id              String   @id @default(uuid(7)) @db.Uuid
+  firstName       String
+  lastName        String
+  // National ID (DNI) stored as text: it is an identifier, not a quantity,
+  // and text keeps any leading zeros. Digits only, no dots.
+  documentNumber  String
+  // Date only (no time, no time zone).
+  birthDate       DateTime @db.Date
+  phone           String?
+  email           String?
+  // Health coverage: "obra social" or "prepaga" name and member number.
+  healthInsurance String?
+  insuranceNumber String?
+  doctorId        String
+  // Restrict: a doctor with patients cannot be deleted by accident.
+  doctor          User     @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // The same doctor cannot register the same DNI twice.
+  @@unique([doctorId, documentNumber])
+  // Matches the list query: filter by doctor, order by last and first name.
+  @@index([doctorId, lastName, firstName])
+  @@map("patient")
 }
