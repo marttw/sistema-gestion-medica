@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { Suspense } from "react";
 
 import { Separator } from "@/components/ui/separator";
@@ -26,7 +27,19 @@ export function AppHeader() {
 }
 
 async function CurrentUser() {
-  const user = await requireSession();
+  let user;
+  try {
+    user = await requireSession();
+  } catch (error) {
+    // redirect() works by throwing: let Next.js handle it.
+    unstable_rethrow(error);
+    // Any other failure (e.g. the database is down) must not take down the
+    // whole private shell: the header just omits the doctor's name and the
+    // page's own error boundary reports the problem.
+    console.error("Could not load the signed-in doctor", error);
+    return null;
+  }
+
   return (
     <div className="flex min-w-0 flex-col items-end text-right leading-tight">
       <span className="truncate text-sm font-medium">{user.name}</span>

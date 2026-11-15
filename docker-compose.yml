@@ -7,6 +7,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      # Sort and compare text with ICU in Spanish (Álvarez before Díaz, ñ after n).
+      # Alpine's C library (musl) cannot do locale-aware sorting on its own.
+      # Only applied when the data volume is created for the first time.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=es-AR"
     ports:
       # Bound to localhost only, so the database is not reachable from the network.
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"

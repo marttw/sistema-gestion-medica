@@ -1,33 +1,30 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { Skeleton } from "@/components/ui/skeleton";
-import { requireSession } from "@/features/auth/session";
+import {
+  PatientList,
+  PatientListSkeleton,
+} from "@/features/patients/components/patient-list";
 
 export const metadata: Metadata = {
   title: "Pacientes",
 };
 
-// Placeholder until the patients module (US-07) replaces it.
 export default function PatientsPage() {
   return (
-    <div className="flex flex-col gap-2 px-4 py-8 sm:px-6">
-      <h1 className="font-heading text-2xl font-semibold tracking-tight">
-        Pacientes
-      </h1>
-      {/* Like every private page, it validates the session on the server. */}
-      <Suspense fallback={<Skeleton className="h-5 w-full max-w-md" />}>
-        <ComingSoon />
+    <div className="flex flex-col gap-6 px-4 py-8 sm:px-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          Pacientes
+        </h1>
+        <p className="text-muted-foreground">
+          Datos administrativos de tus pacientes.
+        </p>
+      </div>
+      {/* The list reads the session and the database at request time. */}
+      <Suspense fallback={<PatientListSkeleton />}>
+        <PatientList />
       </Suspense>
     </div>
-  );
-}
-
-async function ComingSoon() {
-  await requireSession();
-  return (
-    <p className="text-muted-foreground">
-      Próximamente vas a poder administrar tus pacientes desde acá.
-    </p>
   );
 }
