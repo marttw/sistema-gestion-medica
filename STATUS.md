@@ -11,7 +11,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Mergeada (PR #5) |
 | US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Mergeada (PR #6) |
 | US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Mergeada (PR #7) |
-| US-08 | SIS-15 | Implementar alta de pacientes | ✅ Completa |
+| US-08 | SIS-15 | Implementar alta de pacientes | ✅ Mergeada (PR #8) |
+| US-08b | SIS-22 | Normalizar teléfonos de pacientes a E.164 | ✅ Completa |
 
 ---
 
@@ -311,3 +312,43 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **El número de afiliado exige cobertura:** es una regla entre campos, resuelta con `superRefine`. Zod la evalúa cuando el resto de los campos ya es válido.
 - **Los links con estilo de botón son `<Link className={buttonVariants()}>`, no `<Button render={<Link />}>`.** Al renderizarse como `<a>`, el `Button` de Base UI agrega `role="button"`, y un lector de pantalla anunciaría "botón" para algo que navega. Lo detectaron las pruebas e2e.
 - **Se quitó `next-themes`:** shadcn lo agregó junto con sonner solo para leer el tema activo. La app todavía no tiene modo oscuro, así que el `Toaster` usa `theme="light"`.
+
+---
+
+## US-08b: Normalizar teléfonos de pacientes a formato internacional (E.164)
+
+**Fecha:** 2026-11-16
+
+Story agregada al backlog durante la US-08. Al cargar pacientes de prueba, los teléfonos quedaban guardados en formatos distintos (`+54 9 11…`, `11 15…`, `1131…`), lo que impediría buscarlos, compararlos o usarlos en integraciones (WhatsApp, SMS).
+
+### Qué se hizo
+
+- Los teléfonos se guardan en **E.164** (`+5491155550101`) y se muestran en formato nacional (`011 15-5555-0101`), o internacional si son de otro país.
+- Se creó `src/features/patients/phone.ts`, que concentra toda la lógica de teléfonos:
+  - `normalizePhone`: cualquier formato → E.164, o `null` si el número es inválido.
+  - `formatPhone`: E.164 → formato legible.
+  - `planPhoneMigration`: decide qué hacer con cada fila en la migración.
+- El schema Zod valida y normaliza el teléfono con `normalizePhone`, en el cliente y en el servidor.
+- El campo del formulario tiene una ayuda ("Con código de área. Para celulares, incluí el 15 o el 9."). Ahora la ayuda de cada campo también se asocia con `aria-describedby`.
+- Se agregó la migración de datos `pnpm db:normalize-phones`, con modo `--dry-run`.
+- El seed normaliza sus teléfonos al guardarlos y falla si alguno es inválido.
+- Se agregaron 25 tests (97 en total).
+
+### Herramientas y para qué las usamos
+
+- **`libphonenumber-js`:** la versión en JavaScript de la biblioteca de teléfonos de Google. Conoce el plan de numeración de cada país: códigos de área, el `9` de los celulares argentinos, el `15` y la longitud correcta de cada número.
+- **E.164:** el estándar internacional para teléfonos (`+`, código de país y número, sin espacios). Es único para cada número, se puede comparar y buscar, y lo aceptan directamente las APIs de SMS y WhatsApp.
+- **Migración de datos:** un script que cambia el *contenido* de filas existentes, a diferencia de una migración de Prisma, que cambia la *estructura* de las tablas. No se puede hacer en SQL porque necesita las reglas de `libphonenumber-js`.
+
+### Decisiones
+
+- **Separar almacenamiento y presentación:** se guarda un formato canónico y se formatea al mostrar. Es el mismo criterio que el DNI (`30111222` → `30.111.222`) y la fecha de nacimiento.
+- **Metadata `max` en lugar de `min`:** `min` solo verifica la longitud del número, mientras que `max` valida contra el plan de numeración real, que es lo que pide la story. Cuesta 51 KB comprimidos de JavaScript, pero solo los descarga `/patients/new`, porque Next divide el código por ruta. El listado formatea los teléfonos en el servidor, así que no suma JavaScript al navegador.
+- **Un número sin `15` ni `9` se guarda como fijo:** en Argentina, `11 5555-0101` puede ser un fijo o un celular escrito sin su prefijo, y no hay forma de deducirlo. Se guarda como fijo (la lectura técnicamente correcta), y el formulario indica cómo cargar un celular.
+- **Se rechazan las letras antes de validar:** `libphonenumber-js` interpreta las letras como las teclas de un teléfono (`CASA` → `2272`), lo que es correcto para números como `0800-FLORES`, pero no tiene sentido en este formulario.
+- **La migración es segura:**
+  - Es idempotente: lo que ya está en E.164 no se toca, y correrla dos veces da el mismo resultado.
+  - Aplica todas las actualizaciones en una sola transacción.
+  - Nunca borra ni modifica lo que no puede interpretar; lo lista para corregirlo a mano.
+  - `formatPhone` muestra esos valores tal cual, sin romper la pantalla.
+- **La validación encontró datos inválidos en el seed:** los dos teléfonos de Córdoba del seed de la US-07 (`+54 9 351 5555-0201`) tenían un dígito de más. En Argentina, el código de área más el número suman 10 dígitos. La migración los reportó en lugar de "corregirlos", y se arreglaron en el seed. Es un ejemplo de por qué conviene validar contra el plan de numeración y no solo la longitud.

@@ -46,7 +46,7 @@ describe("createPatient", () => {
       lastName: "Fernández",
       documentNumber: "30111222",
       birthDate: new Date("1983-05-14T00:00:00.000Z"),
-      phone: "+54 9 11 5555-0101",
+      phone: "+5491155550101",
       email: null,
       healthInsurance: null,
       insuranceNumber: null,

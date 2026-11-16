@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normalizePhone } from "../phone";
+
 // Shared by the form (instant feedback) and the Server Action (the real
 // check). The schema has two sides:
 // - input: what the form holds, all strings ("" for empty fields).
@@ -7,7 +9,6 @@ import { z } from "zod";
 //   birth date as a Date, empty optional fields as null).
 
 const NAME_PATTERN = /^[\p{L}][\p{L}\s'-]*$/u;
-const PHONE_PATTERN = /^[\d\s()+-]{6,20}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MIN_BIRTH_DATE = "1900-01-01";
 
@@ -68,14 +69,16 @@ export const patientSchema = z
       )
       // Stored as DATE: midnight UTC, same as the rest of the app reads it.
       .transform((value) => new Date(`${value}T00:00:00.000Z`)),
+    // Any common way of writing it is accepted; stored as E.164
+    // ("+5491155550101"). See ../phone.ts.
     phone: z
       .string()
       .trim()
       .refine(
-        (value) => value === "" || PHONE_PATTERN.test(value),
-        "Ingresá un teléfono válido (solo números, espacios, +, - o paréntesis).",
+        (value) => value === "" || normalizePhone(value) !== null,
+        "Ingresá un teléfono válido con código de área.",
       )
-      .transform((value) => (value === "" ? null : value)),
+      .transform((value) => (value === "" ? null : normalizePhone(value))),
     email: z
       .string()
       .trim()

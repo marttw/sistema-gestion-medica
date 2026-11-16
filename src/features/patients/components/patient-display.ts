@@ -1,3 +1,4 @@
+import { formatPhone } from "../phone";
 import type { PatientListItem } from "../types";
 import { calculateAge, formatDate, formatDocumentNumber } from "../utils";
 
@@ -11,7 +12,8 @@ export function toPatientDisplay(patient: PatientListItem, today: Date) {
     documentNumber: formatDocumentNumber(patient.documentNumber),
     birthDate: formatDate(patient.birthDate),
     age: `${age} ${age === 1 ? "año" : "años"}`,
-    phone: patient.phone,
+    // Stored as E.164, shown in a readable format ("011 15-5555-0101").
+    phone: patient.phone ? formatPhone(patient.phone) : null,
     email: patient.email,
     healthInsurance: patient.healthInsurance,
     insuranceNumber: patient.insuranceNumber,
