@@ -1,8 +1,9 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
+import type { PatientFormData } from "./schemas/patient-schema";
 import type { PatientListItem } from "./types";
 
 // Only the columns the list shows. `satisfies` checks the shape against
@@ -30,4 +31,42 @@ export async function findPatientsByDoctor(
     select: patientListSelect,
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
   });
+}
+
+// Inserts a patient for the given doctor. The doctorId must come from the
+// session. Throws DuplicateDocumentNumberError when the doctor already has a
+// patient with that DNI: the database's unique constraint decides, so two
+// simultaneous requests cannot both succeed.
+export async function insertPatient(
+  doctorId: string,
+  data: PatientFormData,
+): Promise<{ id: string }> {
+  try {
+    return await db.patient.create({
+      data: { ...data, doctorId },
+      select: { id: true },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new DuplicateDocumentNumberError();
+    }
+    throw error;
+  }
+}
+
+export class DuplicateDocumentNumberError extends Error {
+  constructor() {
+    super("The doctor already has a patient with this document number.");
+    this.name = "DuplicateDocumentNumberError";
+  }
+}
+
+// P2002: "Unique constraint failed". On the patient table the only unique
+// constraints are the primary key (generated, never repeats) and
+// (doctorId, documentNumber).
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
 }

@@ -109,7 +109,7 @@ src/
 │   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
 │   │   ├── layout.tsx # Layout privado: menú lateral + header + contenido
 │   │   ├── page.tsx   # Ruta "/" (bienvenida)
-│   │   └── patients/  # Ruta "/patients": listado y su estado de error (error.tsx)
+│   │   └── patients/  # "/patients": listado y estado de error; "/patients/new": alta
 │   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
@@ -120,7 +120,7 @@ src/
 │   └── ui/            # Componentes de shadcn/ui (código propio del proyecto)
 ├── features/
 │   ├── auth/          # Login, logout y acceso a la sesión (requireSession)
-│   └── patients/      # Pacientes: repositorio, consultas, utilidades y componentes
+│   └── patients/      # Pacientes: schema Zod, Server Actions, repositorio, consultas y componentes
 ├── generated/prisma/  # Cliente de Prisma generado (no se versiona)
 ├── hooks/             # Hooks de React compartidos (p. ej., useIsMobile)
 ├── proxy.ts           # Redirección rápida al login si no hay cookie de sesión
@@ -158,6 +158,14 @@ Cada dominio separa el acceso a datos en dos capas (por ejemplo, en `src/feature
 - **`queries.ts`:** lo que llaman las páginas. **No recibe IDs**: obtiene al médico con `requireSession()` y le pasa su ID al repositorio.
 
 Así, la identidad del médico siempre sale de la sesión del servidor y nunca de datos enviados por el navegador, y cada médico solo ve sus propios pacientes.
+
+Las escrituras siguen el mismo principio. Una Server Action (por ejemplo `actions/create-patient.ts`) hace lo siguiente:
+
+1. Obtiene al médico con `requireSession()`.
+2. Valida los datos con el **mismo schema Zod** que usa el formulario (`schemas/patient-schema.ts`).
+3. Guarda con el repositorio.
+
+Las reglas de unicidad (un DNI por médico) las garantiza una restricción de la base, no una consulta previa, para que dos pedidos simultáneos no puedan saltearla.
 
 ## Navegación
 

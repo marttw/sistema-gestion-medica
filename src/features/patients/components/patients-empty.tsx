@@ -2,11 +2,14 @@ import { Users } from "lucide-react";
 
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+
+import { NewPatientButton } from "./new-patient-button";
 
 export function PatientsEmpty() {
   return (
@@ -17,9 +20,12 @@ export function PatientsEmpty() {
         </EmptyMedia>
         <EmptyTitle>Todavía no tenés pacientes registrados</EmptyTitle>
         <EmptyDescription>
-          Cuando registres pacientes, vas a verlos en este listado.
+          Registrá tu primer paciente para empezar a administrar sus datos.
         </EmptyDescription>
       </EmptyHeader>
+      <EmptyContent>
+        <NewPatientButton />
+      </EmptyContent>
     </Empty>
   );
 }

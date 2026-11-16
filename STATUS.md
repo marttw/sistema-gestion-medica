@@ -10,7 +10,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-04 | SIS-11 | Implementar login de médicos | ✅ Mergeada (PR #4) |
 | US-05 | SIS-12 | Proteger rutas privadas e implementar logout | ✅ Mergeada (PR #5) |
 | US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Mergeada (PR #6) |
-| US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Completa |
+| US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Mergeada (PR #7) |
+| US-08 | SIS-15 | Implementar alta de pacientes | ✅ Completa |
 
 ---
 
@@ -273,3 +274,40 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 - **El header tolera errores:** el nombre del médico se carga en el layout, que `patients/error.tsx` no cubre. Si esa consulta falla, el header se muestra sin el nombre, en lugar de que toda la pantalla termine en el error genérico de Next.
 - **Base con ICU `es-AR`:** la imagen `postgres:17-alpine` usa musl, que no implementa el orden por idioma, y ordenaba por bytes ("Álvarez" quedaba después de "Sánchez"). Se agregó `POSTGRES_INITDB_ARGS="--locale-provider=icu --icu-locale=es-AR"` en `docker-compose.yml` y se recreó el volumen. Ordenar en TypeScript se descartó porque deja de servir cuando la base pagine (US-12).
 - **Sin React Testing Library ni tests de integración todavía:** los componentes y el aislamiento contra una base real se verificaron con pruebas e2e manuales con los tres médicos. Los tests de interfaz y de integración quedan para la US-13.
+
+---
+
+## US-08: Implementar alta de pacientes
+
+**Fecha:** 2026-11-15
+
+### Qué se hizo
+
+- Se creó la página `/patients/new` con un formulario dividido en tres grupos: datos personales, contacto y cobertura médica.
+  - Obligatorios: nombre, apellido, DNI y fecha de nacimiento, marcados con `*`.
+  - Opcionales: teléfono, email, obra social o prepaga y número de afiliado.
+- Se agregó el botón "Nuevo paciente" en el listado y en el estado vacío.
+- Se creó un schema Zod compartido (`schemas/patient-schema.ts`). Lo usa el formulario, para dar feedback inmediato, y la Server Action `createPatient`, como validación real.
+- La Server Action obtiene al médico de la sesión, valida, guarda con `insertPatient` y, si el DNI está duplicado, devuelve el error en ese campo.
+- Al guardar, aparece el toast "Paciente registrado" y se vuelve al listado, que ya incluye al paciente nuevo.
+- Se agregaron 34 tests (72 en total): schema, Server Action y repositorio.
+
+### Herramientas y para qué las usamos
+
+- **React Hook Form + `zodResolver`:** valida en el navegador con el mismo schema que el servidor. `setError` muestra en cada campo los errores que devuelve el servidor (por ejemplo, el DNI duplicado), y `setFocus` lleva el foco al primero.
+- **Entrada y salida de un schema Zod** (`z.input` y `z.output`): el formulario maneja texto (`"30.111.222"`, `"1983-05-14"`, `""`), y el schema lo transforma en datos listos para la base (`"30111222"`, `Date` en UTC, `null`). `useForm<Input, unknown, Output>` le indica a RHF los dos tipos.
+- **`revalidatePath("/patients")`:** después de guardar, invalida el render cacheado del listado, para que muestre al paciente nuevo.
+- **sonner** (componente `Sonner` de shadcn/ui): notificaciones flotantes (*toasts*). El `<Toaster />` está en el layout raíz, así que el toast sobrevive a la navegación del formulario al listado. Lo vamos a reutilizar en la edición y la baja.
+- **Códigos de error de Prisma:** `P2002` significa "se violó una restricción única". El repositorio lo traduce a `DuplicateDocumentNumberError`, un error del dominio que la acción sabe manejar.
+
+### Decisiones
+
+- **El DNI duplicado lo detecta la base, no una consulta previa.** Con un "¿ya existe?" seguido de un `INSERT`, dos pedidos simultáneos (por ejemplo, un doble clic) pasarían los dos el chequeo y se guardarían ambos (una *condición de carrera*). Se inserta directamente y la restricción `@@unique([doctorId, documentNumber])` de la US-07 rechaza el duplicado. Se verificó contra PostgreSQL real: de dos altas simultáneas, una se guarda y la otra se rechaza, y otro médico puede registrar el mismo DNI.
+- **"Pacientes activos" queda para la US-11:** hoy no hay baja lógica, así que la restricción aplica a todos los pacientes. Cuando llegue `deletedAt`, se va a convertir en un índice único parcial (`WHERE "deletedAt" IS NULL`).
+- **El formulario envía los valores crudos** (`getValues()`), no los ya transformados. El servidor vuelve a validar y normalizar con el mismo schema, y no se envía un `Date` donde el schema espera texto.
+- **Se ignora cualquier `doctorId` enviado por el navegador:** Zod descarta las claves que no están en el schema, y el repositorio recibe el ID de la sesión. Hay un test que lo verifica.
+- **El DNI se acepta con o sin puntos y se guarda solo con dígitos** (7 u 8). El email se guarda en minúsculas y los opcionales vacíos como `null`.
+- **Fecha de nacimiento con `<input type="date">` nativo:** en celular abre el selector del sistema, y el valor llega como `YYYY-MM-DD`, sin ambigüedad de formato. Se validan las fechas inexistentes (`2001-02-30`), las futuras y las anteriores a 1900.
+- **El número de afiliado exige cobertura:** es una regla entre campos, resuelta con `superRefine`. Zod la evalúa cuando el resto de los campos ya es válido.
+- **Los links con estilo de botón son `<Link className={buttonVariants()}>`, no `<Button render={<Link />}>`.** Al renderizarse como `<a>`, el `Button` de Base UI agrega `role="button"`, y un lector de pantalla anunciaría "botón" para algo que navega. Lo detectaron las pruebas e2e.
+- **Se quitó `next-themes`:** shadcn lo agregó junto con sonner solo para leer el tema activo. La app todavía no tiene modo oscuro, así que el `Toaster` usa `theme="light"`.
