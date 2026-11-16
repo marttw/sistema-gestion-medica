@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
+    "db:normalize-phones": "tsx --conditions=react-server prisma/data-migrations/normalize-patient-phones.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -23,6 +24,7 @@
     "better-auth": "1.7.17",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
+    "libphonenumber-js": "^1.13.16",
     "lucide-react": "^1.67.0",
     "next": "16.4.5",
     "pg": "^8.23.1",

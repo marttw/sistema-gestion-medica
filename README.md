@@ -97,6 +97,7 @@ Para verificar la conexión con la base: [http://localhost:3000/api/health](http
 | `pnpm db:migrate`| Crea (si hay cambios en el schema) y aplica migraciones en desarrollo. |
 | `pnpm db:generate`| Regenera el cliente de Prisma a partir del schema.                 |
 | `pnpm db:seed`   | Crea los datos de prueba de desarrollo.                            |
+| `pnpm db:normalize-phones` | Migración de datos: pasa los teléfonos guardados a E.164. Con `--dry-run` muestra los cambios sin aplicarlos. |
 
 > En Windows, si PowerShell bloquea `pnpm` ("running scripts is disabled"), usá `pnpm.cmd` o habilitá scripts locales con `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
@@ -166,6 +167,20 @@ Las escrituras siguen el mismo principio. Una Server Action (por ejemplo `action
 3. Guarda con el repositorio.
 
 Las reglas de unicidad (un DNI por médico) las garantiza una restricción de la base, no una consulta previa, para que dos pedidos simultáneos no puedan saltearla.
+
+### Formatos de almacenamiento
+
+Algunos datos se guardan en un formato canónico y se formatean al mostrarlos:
+
+| Dato | Se guarda | Se muestra |
+| --- | --- | --- |
+| DNI | `30111222` | `30.111.222` |
+| Fecha de nacimiento | `DATE` (sin hora) | `14/05/1983` |
+| Teléfono | E.164: `+5491155550101` | `011 15-5555-0101` (los números extranjeros, en formato internacional) |
+
+Toda la lógica de teléfonos está en `src/features/patients/phone.ts`, sobre `libphonenumber-js`. Si no se indica el código de país, se asume Argentina. Un número sin `15` ni `9` se interpreta como fijo, porque no hay forma de saber si es un celular.
+
+Los cambios en el **contenido** de datos existentes (no en la estructura de las tablas) se hacen con scripts en `prisma/data-migrations/`. Estos scripts son idempotentes y tienen modo `--dry-run`.
 
 ## Navegación
 

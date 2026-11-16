@@ -3,6 +3,7 @@
 // existing doctors are reused and patients are upserted by (doctor, DNI).
 import "dotenv/config";
 
+import { normalizePhone } from "@/features/patients/phone";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -43,9 +44,9 @@ const DOCTORS: SeedDoctor[] = [
     name: "Dr. Bruno Gómez",
     email: "medico2@example.com",
     patients: [
-      { firstName: "Elena", lastName: "Torres", documentNumber: "20123456", birthDate: "1968-01-25", phone: "+54 9 351 5555-0201", healthInsurance: "Medifé", insuranceNumber: "MF-778899" },
+      { firstName: "Elena", lastName: "Torres", documentNumber: "20123456", birthDate: "1968-01-25", phone: "+54 9 351 555-0201", healthInsurance: "Medifé", insuranceNumber: "MF-778899" },
       { firstName: "Pablo", lastName: "Ramírez", documentNumber: "35678901", birthDate: "1990-09-12", email: "pablo.ramirez@example.com" },
-      { firstName: "Julieta", lastName: "Castro", documentNumber: "43210987", birthDate: "2001-06-03", phone: "+54 9 351 5555-0203", healthInsurance: "OSDE", insuranceNumber: "61200011122" },
+      { firstName: "Julieta", lastName: "Castro", documentNumber: "43210987", birthDate: "2001-06-03", phone: "+54 9 351 555-0203", healthInsurance: "OSDE", insuranceNumber: "61200011122" },
     ],
   },
   // No patients: shows the empty state.
@@ -98,8 +99,13 @@ async function ensureDoctor(
 }
 
 async function seedPatients(doctorId: string, patients: SeedPatient[]) {
-  for (const { birthDate, ...patient } of patients) {
-    const data = { ...patient, birthDate: new Date(birthDate) };
+  for (const { birthDate, phone, ...patient } of patients) {
+    const data = {
+      ...patient,
+      birthDate: new Date(birthDate),
+      // Written in a human format above, stored as E.164 like the app does.
+      phone: phone ? toE164(phone) : null,
+    };
     await db.patient.upsert({
       // The compound unique key (doctorId, documentNumber) identifies it.
       where: {
@@ -112,6 +118,12 @@ async function seedPatients(doctorId: string, patients: SeedPatient[]) {
       create: { ...data, doctorId },
     });
   }
+}
+
+function toE164(phone: string): string {
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error(`Invalid phone in seed data: "${phone}"`);
+  return normalized;
 }
 
 main()

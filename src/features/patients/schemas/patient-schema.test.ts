@@ -119,13 +119,19 @@ describe("patientSchema: optional fields", () => {
     expect(result.email).toBe("lucia@example.com");
   });
 
-  it("rejects a phone with letters", () => {
-    expect(errorFor({ ...valid, phone: "11-CASA" }, "phone")).toBeDefined();
+  it("rejects an invalid phone next to the field", () => {
+    expect(errorFor({ ...valid, phone: "11-CASA" }, "phone")).toBe(
+      "Ingresá un teléfono válido con código de área.",
+    );
+    expect(errorFor({ ...valid, phone: "1234" }, "phone")).toBeDefined();
   });
 
-  it("accepts a phone with country code, spaces and hyphens", () => {
-    const result = patientSchema.safeParse({ ...valid, phone: "+54 9 11 5555-0101" });
-    expect(result.success).toBe(true);
+  it.each([
+    ["+54 9 11 5555-0101", "+5491155550101"],
+    ["11 15-5555-0101", "+5491155550101"],
+    ["011 4555-0101", "+541145550101"],
+  ])("stores the phone %s as E.164 (%s)", (phone, expected) => {
+    expect(patientSchema.parse({ ...valid, phone }).phone).toBe(expected);
   });
 
   it("requires the health insurance when a member number is given", () => {

@@ -76,10 +76,12 @@ export function PatientForm() {
   });
 
   // Props shared by every text input: registration plus accessible errors.
+  // Screen readers announce the error, or the field's help text when there
+  // is no error (an id without a matching element is simply ignored).
   const fieldProps = (name: keyof PatientFormInput) => ({
     id: name,
     "aria-invalid": Boolean(errors[name]),
-    "aria-describedby": errors[name] ? `${name}-error` : undefined,
+    "aria-describedby": errors[name] ? `${name}-error` : `${name}-description`,
     ...register(name),
   });
 
@@ -129,11 +131,16 @@ export function PatientForm() {
       <FieldSet>
         <FieldLegend>Contacto</FieldLegend>
         <FieldGroup className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Teléfono" name="phone" error={errors.phone}>
+          <FormField
+            label="Teléfono"
+            name="phone"
+            error={errors.phone}
+            description="Con código de área. Para celulares, incluí el 15 o el 9."
+          >
             <Input
               type="tel"
               autoComplete="tel"
-              placeholder="+54 9 11 5555-0101"
+              placeholder="11 15-5555-0101"
               {...fieldProps("phone")}
             />
           </FormField>
@@ -216,7 +223,9 @@ function FormField({
         )}
       </FieldLabel>
       {children}
-      {description && !error && <FieldDescription>{description}</FieldDescription>}
+      {description && !error && (
+        <FieldDescription id={`${name}-description`}>{description}</FieldDescription>
+      )}
       <FieldError id={`${name}-error`} errors={[error]} />
     </Field>
   );
