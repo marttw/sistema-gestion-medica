@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { emptyPatientForm, patientSchema } from "./patient-schema";
+import { emptyPatientForm, patientSchema, toPatientFormValues } from "./patient-schema";
 
 const valid = {
   ...emptyPatientForm,
@@ -138,5 +138,55 @@ describe("patientSchema: optional fields", () => {
     expect(errorFor({ ...valid, insuranceNumber: "123" }, "healthInsurance")).toBe(
       "Indicá la obra social o prepaga del número de afiliado.",
     );
+  });
+});
+
+describe("toPatientFormValues", () => {
+  const stored = {
+    firstName: "Lucía",
+    lastName: "Fernández",
+    documentNumber: "30111222",
+    birthDate: new Date("1983-05-14T00:00:00.000Z"),
+    phone: "+5491155550101",
+    email: "lucia.fernandez@example.com",
+    healthInsurance: "OSDE",
+    insuranceNumber: "61234567801",
+  };
+
+  it("shows stored values the way the form expects them", () => {
+    expect(toPatientFormValues(stored)).toEqual({
+      firstName: "Lucía",
+      lastName: "Fernández",
+      documentNumber: "30.111.222",
+      birthDate: "1983-05-14",
+      phone: "011 15-5555-0101",
+      email: "lucia.fernandez@example.com",
+      healthInsurance: "OSDE",
+      insuranceNumber: "61234567801",
+    });
+  });
+
+  it("turns empty optional fields into empty strings", () => {
+    const values = toPatientFormValues({
+      ...stored,
+      phone: null,
+      email: null,
+      healthInsurance: null,
+      insuranceNumber: null,
+    });
+
+    expect(values).toMatchObject({ phone: "", email: "", healthInsurance: "", insuranceNumber: "" });
+  });
+
+  it.each([
+    ["an Argentine mobile", { phone: "+5491155550101" }],
+    ["an Argentine landline", { phone: "+543514550201" }],
+    ["a foreign number", { phone: "+12125550123" }],
+    ["empty optional fields", { phone: null, email: null, healthInsurance: null, insuranceNumber: null }],
+    ["a 7-digit DNI", { documentNumber: "4123456" }],
+  ])("round trip with %s: saving without changes keeps the stored data", (_, overrides) => {
+    const patient = { ...stored, ...overrides };
+
+    expect(patientSchema.parse(toPatientFormValues(patient))).toEqual(patient);
   });
 });

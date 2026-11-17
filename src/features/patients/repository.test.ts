@@ -2,20 +2,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Prisma } from "@/generated/prisma/client";
 
-const { findMany, findFirst, create } = vi.hoisted(() => ({
+const { findMany, findFirst, create, updateMany } = vi.hoisted(() => ({
   findMany: vi.fn(),
   findFirst: vi.fn(),
   create: vi.fn(),
+  updateMany: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/db", () => ({ db: { patient: { findMany, findFirst, create } } }));
+vi.mock("@/lib/db", () => ({ db: { patient: { findMany, findFirst, create, updateMany } } }));
 
 import {
   DuplicateDocumentNumberError,
   findPatientForDoctor,
   findPatientsByDoctor,
   insertPatient,
+  updatePatientForDoctor,
 } from "./repository";
 
 const patientData = {
@@ -118,14 +120,65 @@ describe("findPatientForDoctor", () => {
     await expect(findPatientForDoctor("doctor-ana", patientId)).resolves.toBeNull();
   });
 
-  it("selects the same administrative fields as the list (never the doctor)", async () => {
+  it("selects the list fields plus updatedAt (never the doctor)", async () => {
     findFirst.mockResolvedValue(null);
     findMany.mockResolvedValue([]);
 
     await findPatientForDoctor("doctor-ana", patientId);
     await findPatientsByDoctor("doctor-ana");
 
-    expect(findFirst.mock.calls[0][0].select).toEqual(findMany.mock.calls[0][0].select);
+    expect(findFirst.mock.calls[0][0].select).toEqual({
+      ...findMany.mock.calls[0][0].select,
+      updatedAt: true,
+    });
     expect(findFirst.mock.calls[0][0].select).not.toHaveProperty("doctorId");
+  });
+});
+
+describe("updatePatientForDoctor", () => {
+  const patientId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+
+  it("updates only the row that matches the patient id AND the doctor", async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(updatePatientForDoctor("doctor-ana", patientId, patientData)).resolves.toBe(true);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: patientId, doctorId: "doctor-ana" },
+      data: patientData,
+    });
+  });
+
+  it("never writes the doctor: data has no doctorId", async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await updatePatientForDoctor("doctor-ana", patientId, patientData);
+
+    expect(updateMany.mock.calls[0][0].data).not.toHaveProperty("doctorId");
+  });
+
+  it("returns false when no row matched (missing or another doctor's)", async () => {
+    updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(updatePatientForDoctor("doctor-ana", patientId, patientData)).resolves.toBe(false);
+  });
+
+  it("turns a unique constraint violation into DuplicateDocumentNumberError", async () => {
+    updateMany.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
+    );
+
+    await expect(
+      updatePatientForDoctor("doctor-ana", patientId, patientData),
+    ).rejects.toBeInstanceOf(DuplicateDocumentNumberError);
+  });
+
+  it("rethrows any other database error unchanged", async () => {
+    const failure = new Error("connection refused");
+    updateMany.mockRejectedValue(failure);
+
+    await expect(updatePatientForDoctor("doctor-ana", patientId, patientData)).rejects.toBe(failure);
   });
 });

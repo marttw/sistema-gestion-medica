@@ -6,9 +6,8 @@ import { db } from "@/lib/db";
 import type { PatientFormData } from "./schemas/patient-schema";
 import type { PatientDetail, PatientListItem } from "./types";
 
-// Only the administrative columns the UI shows (never doctorId or
-// timestamps). `satisfies` checks the shape against Prisma's types without
-// widening it.
+// Only the administrative columns the list shows (never doctorId).
+// `satisfies` checks the shape against Prisma's types without widening it.
 const patientSelect = {
   id: true,
   firstName: true,
@@ -19,6 +18,12 @@ const patientSelect = {
   email: true,
   healthInsurance: true,
   insuranceNumber: true,
+} satisfies Prisma.PatientSelect;
+
+// The detail also shows when the patient was last modified.
+const patientDetailSelect = {
+  ...patientSelect,
+  updatedAt: true,
 } satisfies Prisma.PatientSelect;
 
 // Persistence only: no session, no business rules. It trusts the doctorId it
@@ -44,8 +49,33 @@ export async function findPatientForDoctor(
 ): Promise<PatientDetail | null> {
   return db.patient.findFirst({
     where: { id: patientId, doctorId },
-    select: patientSelect,
+    select: patientDetailSelect,
   });
+}
+
+// Updates a patient only if it belongs to the given doctor; returns false
+// when no row matched (missing or another doctor's: same answer for both).
+// Ownership and the write are one atomic statement, with no "read, check,
+// then write" gap. Prisma sets updatedAt (@updatedAt) automatically.
+// Throws DuplicateDocumentNumberError when the new DNI belongs to another of
+// the doctor's patients. Keeping its own DNI is not a conflict (same row).
+export async function updatePatientForDoctor(
+  doctorId: string,
+  patientId: string,
+  data: PatientFormData,
+): Promise<boolean> {
+  try {
+    const { count } = await db.patient.updateMany({
+      where: { id: patientId, doctorId },
+      data,
+    });
+    return count > 0;
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new DuplicateDocumentNumberError();
+    }
+    throw error;
+  }
 }
 
 // Inserts a patient for the given doctor. The doctorId must come from the

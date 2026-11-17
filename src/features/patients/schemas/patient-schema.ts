@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { normalizePhone } from "../phone";
+import { formatPhone, normalizePhone } from "../phone";
+import { formatDocumentNumber } from "../utils";
 
 // Shared by the form (instant feedback) and the Server Action (the real
 // check). The schema has two sides:
@@ -123,3 +124,30 @@ export const emptyPatientForm: PatientFormInput = {
   healthInsurance: "",
   insuranceNumber: "",
 };
+
+// The way back: a stored patient as the form shows it, to prefill the edit
+// form. Saving it unchanged produces the same stored values (see tests).
+export function toPatientFormValues(patient: {
+  firstName: string;
+  lastName: string;
+  documentNumber: string;
+  birthDate: Date;
+  phone: string | null;
+  email: string | null;
+  healthInsurance: string | null;
+  insuranceNumber: string | null;
+}): PatientFormInput {
+  return {
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    // "30111222" -> "30.111.222": the schema accepts the dots.
+    documentNumber: formatDocumentNumber(patient.documentNumber),
+    // DATE comes as 00:00 UTC: the UTC day is the stored day.
+    birthDate: patient.birthDate.toISOString().slice(0, 10),
+    // E.164 -> "011 15-5555-0101", which normalizes back to the same E.164.
+    phone: patient.phone ? formatPhone(patient.phone) : "",
+    email: patient.email ?? "",
+    healthInsurance: patient.healthInsurance ?? "",
+    insuranceNumber: patient.insuranceNumber ?? "",
+  };
+}

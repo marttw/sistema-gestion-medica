@@ -5,7 +5,7 @@ import { Suspense } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { requireSession } from "@/features/auth/session";
-import { PatientForm } from "@/features/patients/components/patient-form";
+import { CreatePatientForm } from "@/features/patients/components/create-patient-form";
 
 export const metadata: Metadata = {
   title: "Nuevo paciente",
@@ -42,7 +42,7 @@ export default function NewPatientPage() {
 
 async function AuthorizedForm() {
   await requireSession();
-  return <PatientForm />;
+  return <CreatePatientForm />;
 }
 
 function FormSkeleton() {
