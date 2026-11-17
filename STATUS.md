@@ -13,7 +13,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Mergeada (PR #7) |
 | US-08 | SIS-15 | Implementar alta de pacientes | ✅ Mergeada (PR #8) |
 | US-08b | SIS-22 | Normalizar teléfonos de pacientes a E.164 | ✅ Mergeada (PR #9) |
-| US-09 | SIS-16 | Visualizar detalle de paciente | ✅ Completa |
+| US-09 | SIS-16 | Visualizar detalle de paciente | ✅ Mergeada (PR #10) |
+| US-10 | SIS-17 | Modificar datos de pacientes | ✅ Completa |
 
 ---
 
@@ -399,3 +400,56 @@ Story agregada al backlog durante la US-08. Al cargar pacientes de prueba, los t
   - En las rutas estáticas el pathname se resuelve en el build y el fallback nunca se ve.
 - **`PatientDetail` comparte la forma de `PatientListItem`:** hoy el listado ya muestra todos los datos administrativos. Tener un tipo propio permite que el detalle sume campos sin tocar el listado.
 - **Sin fecha de alta ni de modificación:** son timestamps, y mostrarlos bien requiere manejar la zona horaria de Argentina. Se agregarán cuando una story lo necesite.
+
+---
+
+## US-10: Modificar datos de pacientes
+
+**Fecha:** 2026-11-17
+
+### Qué se hizo
+
+- El detalle del paciente tiene un botón **Editar**, que lleva a `/patients/[patientId]/edit`. Ahí está el formulario del alta, precargado con los datos actuales.
+- Al guardar se muestra un toast "Cambios guardados" y se vuelve al detalle, que ya muestra los datos nuevos.
+- El detalle muestra la **última modificación** (`17/11/2026 15:42`, en hora de Argentina) dentro de un `<time>`.
+- Se agregaron:
+  - `updatePatient` (Server Action) y `updatePatientForDoctor` (repositorio).
+  - `toPatientFormValues`, que convierte un paciente guardado en los valores del formulario.
+  - `formatDateTime`.
+- `PatientForm` pasó a ser genérico. `CreatePatientForm` y `EditPatientForm` definen la acción y qué pasa al guardar.
+- El resultado de las acciones, los mensajes y `firstErrorPerField` se movieron a `actions/patient-action-result.ts`, compartido por las dos acciones.
+- Se agregaron 27 tests (138 en total).
+
+### Herramientas y para qué las usamos
+
+- **`updateMany` de Prisma:** genera un `UPDATE … WHERE` con cualquier filtro y devuelve cuántas filas cambió. Lo usamos para que la pertenencia y la escritura sean una sola sentencia.
+- **`@updatedAt` de Prisma:** el campo existe desde la US-07. Prisma lo actualiza en cada `update` o `updateMany`, sin código propio.
+- **`Function.prototype.bind` con Server Actions:** `updatePatient.bind(null, id)` crea una acción que ya recibe el ID como primer argumento.
+- **`Intl.DateTimeFormat` con `timeZone`:** formatea un instante en la zona horaria de Argentina, sin importar en qué zona corre el servidor.
+
+### Decisiones
+
+- **Se reutiliza el formulario, pero no las reglas de negocio:**
+  - El formulario y el schema Zod son comunes.
+  - Cada operación tiene su Server Action, porque las reglas difieren: editar exige que el paciente exista y sea del médico.
+  - `PatientForm` no tiene ningún `if (isEdit)`: recibe la acción, los valores iniciales, los textos y un callback `onSuccess`.
+- **Wrappers cliente para el éxito:** un Server Component no puede pasarle funciones a un Client Component (no son serializables); sí puede pasarle Server Actions. Por eso `onSuccess` (el toast y la navegación) vive en `CreatePatientForm` y `EditPatientForm`, que son Client Components.
+- **El ID ligado no es confiable:**
+  - Los argumentos de `.bind` viajan desde el navegador como cualquier otro dato, así que la acción valida el UUID y la pertenencia la decide el `WHERE`.
+  - Verificado por HTTP: se extrajo el ID de la acción del JavaScript del navegador y se la llamó con la sesión de Ana y el ID de un paciente de Bruno. Respondió "No encontramos este paciente" y el paciente de Bruno quedó intacto.
+- **`updateMany` en lugar de leer y después escribir:**
+  - Leer el paciente, verificar el médico y después actualizar deja una ventana entre la lectura y la escritura, y una regla que alguien puede olvidar.
+  - Con `updateMany({ where: { id, doctorId } })`, la base hace las dos cosas juntas.
+  - Si el resultado es 0 filas, el paciente no existe o es ajeno, sin distinguir entre los dos casos.
+- **DNI duplicado:** lo resuelve la misma restricción única que en el alta. Conservar el propio DNI no genera conflicto, porque es la misma fila (verificado contra la base).
+- **Precarga y "ida y vuelta":**
+  - `toPatientFormValues` muestra el DNI con puntos, la fecha como `YYYY-MM-DD` en UTC y el teléfono en formato nacional. Los valores vacíos se muestran como `""`.
+  - Un test garantiza que guardar sin tocar nada deja exactamente los mismos datos, incluidos los teléfonos fijos, los extranjeros y los DNI de 7 dígitos.
+- **Valores en el HTML del servidor:** React Hook Form carga los `defaultValues` recién al hidratar, así que el HTML llegaba con el formulario vacío (lo detectó la verificación por HTTP). Ahora cada input recibe también `defaultValue` y el formulario se ve completo desde el primer render.
+- **La última modificación, en hora de Argentina:**
+  - `updatedAt` es un instante real, a diferencia de la fecha de nacimiento, que es solo un día.
+  - El servidor puede correr en UTC, así que la zona horaria es explícita (`America/Argentina/Buenos_Aires`). Un test cubre el caso cerca de la medianoche, donde la fecha en UTC ya es el día siguiente.
+- **El título de la pestaña es "Editar paciente", sin el nombre**, por el mismo motivo que en el detalle.
+- **Fuera de alcance:**
+  - Las ediciones concurrentes: si dos pestañas editan el mismo paciente, gana la última.
+  - El aviso de "cambios sin guardar".

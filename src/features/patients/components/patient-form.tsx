@@ -3,10 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleAlert } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition, type ComponentProps } from "react";
 import { type FieldError as RhfFieldError, useForm } from "react-hook-form";
-import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -21,16 +19,32 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-import { createPatient } from "../actions/create-patient";
+import type { PatientActionResult } from "../actions/patient-action-result";
 import {
-  emptyPatientForm,
   type PatientFormData,
   type PatientFormInput,
   patientSchema,
 } from "../schemas/patient-schema";
 
-export function PatientForm() {
-  const router = useRouter();
+// The patient form, shared by create and edit. It only knows how to show,
+// validate and submit the fields; what to save and what happens afterwards
+// come as props (see create-patient-form.tsx and edit-patient-form.tsx), so
+// there is no "if editing" logic in here.
+export function PatientForm({
+  defaultValues,
+  action,
+  onSuccess,
+  submitLabel,
+  cancelHref,
+}: {
+  defaultValues: PatientFormInput;
+  // A Server Action: receives the raw form values and validates them again.
+  action: (input: PatientFormInput) => Promise<PatientActionResult>;
+  // Runs after a successful save, with the values that were sent.
+  onSuccess: (values: PatientFormInput) => void;
+  submitLabel: string;
+  cancelHref: string;
+}) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -43,7 +57,7 @@ export function PatientForm() {
     formState: { errors },
   } = useForm<PatientFormInput, unknown, PatientFormData>({
     resolver: zodResolver(patientSchema),
-    defaultValues: emptyPatientForm,
+    defaultValues,
   });
 
   // handleSubmit only runs this when the browser-side validation passes.
@@ -52,13 +66,11 @@ export function PatientForm() {
     startTransition(async () => {
       // Send the raw form values (strings): the server validates and
       // normalizes them again with the same schema.
-      const result = await createPatient(getValues());
+      const values = getValues();
+      const result = await action(values);
 
       if (result.ok) {
-        toast.success("Paciente registrado", {
-          description: `${getValues("firstName").trim()} ${getValues("lastName").trim()} ya figura en tu listado.`,
-        });
-        router.push("/patients");
+        onSuccess(values);
         return;
       }
 
@@ -78,8 +90,12 @@ export function PatientForm() {
   // Props shared by every text input: registration plus accessible errors.
   // Screen readers announce the error, or the field's help text when there
   // is no error (an id without a matching element is simply ignored).
+  // defaultValue: React Hook Form fills uncontrolled inputs only after
+  // hydration; passing it here too puts the values in the server HTML, so
+  // the edit form is never shown empty while the JavaScript loads.
   const fieldProps = (name: keyof PatientFormInput) => ({
     id: name,
+    defaultValue: defaultValues[name],
     "aria-invalid": Boolean(errors[name]),
     "aria-describedby": errors[name] ? `${name}-error` : `${name}-description`,
     ...register(name),
@@ -182,11 +198,11 @@ export function PatientForm() {
       {/* On mobile the primary action goes first and buttons take full width. */}
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         {/* Navigation, so a real link styled as a button (not role="button"). */}
-        <Link href="/patients" className={buttonVariants({ variant: "outline" })}>
+        <Link href={cancelHref} className={buttonVariants({ variant: "outline" })}>
           Cancelar
         </Link>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Guardando…" : "Guardar paciente"}
+          {isPending ? "Guardando…" : submitLabel}
         </Button>
       </div>
     </form>

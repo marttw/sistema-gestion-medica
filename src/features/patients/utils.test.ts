@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateAge, formatDate, formatDocumentNumber } from "./utils";
+import { calculateAge, formatDate, formatDateTime, formatDocumentNumber } from "./utils";
 
 // Dates as Prisma returns a DATE column: 00:00 UTC.
 const utc = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -44,5 +44,20 @@ describe("formatDocumentNumber", () => {
 
   it("leaves values that are not only digits unchanged", () => {
     expect(formatDocumentNumber("AB123")).toBe("AB123");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("shows a timestamp in Argentina's time (UTC-3), 24-hour clock", () => {
+    expect(formatDateTime(new Date("2026-11-17T18:42:00.000Z"))).toBe("17/11/2026 15:42");
+  });
+
+  it("uses Argentina's date, not UTC's, near midnight", () => {
+    // 01:30 UTC on the 18th is still 22:30 on the 17th in Argentina.
+    expect(formatDateTime(new Date("2026-11-18T01:30:00.000Z"))).toBe("17/11/2026 22:30");
+  });
+
+  it("pads single-digit hours", () => {
+    expect(formatDateTime(new Date("2026-01-05T12:05:00.000Z"))).toBe("05/01/2026 09:05");
   });
 });

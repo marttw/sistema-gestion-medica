@@ -1,8 +1,12 @@
+import { Pencil } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { PatientDetail as PatientDetailData } from "../types";
+import { formatDateTime } from "../utils";
 import { toPatientDisplay } from "./patient-display";
 
 // Server Component: receives a patient already authorized by getMyPatient()
@@ -18,14 +22,24 @@ export function PatientDetail({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          {patient.firstName} {patient.lastName}
-        </h1>
-        <p className="text-muted-foreground">
-          DNI <span className="tabular-nums">{display.documentNumber}</span> ·{" "}
-          {display.age}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            {patient.firstName} {patient.lastName}
+          </h1>
+          <p className="text-muted-foreground">
+            DNI <span className="tabular-nums">{display.documentNumber}</span> ·{" "}
+            {display.age}
+          </p>
+        </div>
+        {/* Navigation, so a real link styled as a button. */}
+        <Link
+          href={`/patients/${patient.id}/edit`}
+          className={buttonVariants({ variant: "outline" })}
+        >
+          <Pencil aria-hidden="true" />
+          Editar
+        </Link>
       </div>
 
       <DetailSection title="Datos personales">
@@ -77,6 +91,14 @@ export function PatientDetail({
           )}
         </DetailItem>
       </DetailSection>
+
+      <p className="text-sm text-muted-foreground">
+        Última modificación:{" "}
+        {/* <time> carries the exact instant in a machine-readable form. */}
+        <time dateTime={patient.updatedAt.toISOString()} className="tabular-nums">
+          {formatDateTime(patient.updatedAt)}
+        </time>
+      </p>
     </div>
   );
 }

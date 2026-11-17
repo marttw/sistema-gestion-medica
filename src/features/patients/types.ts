@@ -12,7 +12,7 @@ export type PatientListItem = {
   insuranceNumber: string | null;
 };
 
-// What the detail page needs. Today the list already includes every
-// administrative field, so both share the shape; a separate name lets them
-// diverge later (e.g. the detail adding fields the list does not show).
-export type PatientDetail = PatientListItem;
+// What the detail page needs: the list's fields plus the last modification.
+export type PatientDetail = PatientListItem & {
+  updatedAt: Date;
+};

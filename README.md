@@ -110,7 +110,7 @@ src/
 │   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
 │   │   ├── layout.tsx # Layout privado: menú lateral + header + contenido
 │   │   ├── page.tsx   # Ruta "/" (bienvenida)
-│   │   └── patients/  # "/patients": listado; "/patients/new": alta; "/patients/[patientId]": detalle
+│   │   └── patients/  # "/patients": listado; "/new": alta; "/[patientId]": detalle; "/[patientId]/edit": edición
 │   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
@@ -174,6 +174,10 @@ Las escrituras siguen el mismo principio. Una Server Action (por ejemplo `action
 
 Las reglas de unicidad (un DNI por médico) las garantiza una restricción de la base, no una consulta previa, para que dos pedidos simultáneos no puedan saltearla.
 
+Las modificaciones (por ejemplo `actions/update-patient.ts`) agregan una regla: el `UPDATE` filtra por el ID **y** por el médico de la sesión (`updateMany({ where: { id, doctorId } })`). Si no actualiza ninguna fila, el paciente no existe o es de otro médico, y la respuesta es la misma para los dos casos. El ID que llega a la acción, aunque esté ligado con `.bind`, viene del navegador y se trata como cualquier otro dato no confiable.
+
+El formulario de pacientes (`components/patient-form.tsx`) se comparte entre el alta y la edición: recibe la acción, los valores iniciales y qué hacer al guardar. Cada flujo tiene su propio componente (`create-patient-form.tsx` y `edit-patient-form.tsx`) y su propia Server Action. Lo único compartido es el schema Zod, que define qué es un paciente válido.
+
 ### Formatos de almacenamiento
 
 Algunos datos se guardan en un formato canónico y se formatean al mostrarlos:
@@ -183,6 +187,7 @@ Algunos datos se guardan en un formato canónico y se formatean al mostrarlos:
 | DNI | `30111222` | `30.111.222` |
 | Fecha de nacimiento | `DATE` (sin hora) | `14/05/1983` |
 | Teléfono | E.164: `+5491155550101` | `011 15-5555-0101` (los números extranjeros, en formato internacional) |
+| Última modificación | `timestamp` en UTC (`updatedAt`, lo actualiza Prisma) | `17/11/2026 15:42` (hora de Argentina) |
 
 Toda la lógica de teléfonos está en `src/features/patients/phone.ts`, sobre `libphonenumber-js`. Si no se indica el código de país, se asume Argentina. Un número sin `15` ni `9` se interpreta como fijo, porque no hay forma de saber si es un celular.
 

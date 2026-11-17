@@ -14,6 +14,30 @@ export function formatDate(date: Date): string {
   return dateFormatter.format(date);
 }
 
+// Timestamps (e.g. updatedAt) are real instants, unlike birth dates. They are
+// formatted on the server, whose clock may run in UTC, so the time zone must
+// be explicit: the app is used in Argentina.
+const APP_TIME_ZONE = "America/Argentina/Buenos_Aires";
+
+const timestampDateFormatter = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: APP_TIME_ZONE,
+});
+
+const timestampTimeFormatter = new Intl.DateTimeFormat("es-AR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: APP_TIME_ZONE,
+});
+
+// 2026-11-17T18:42:00Z -> "17/11/2026 15:42" (Argentina, UTC-3)
+export function formatDateTime(date: Date): string {
+  return `${timestampDateFormatter.format(date)} ${timestampTimeFormatter.format(date)}`;
+}
+
 // Full years between the birth date and `today` (defaults to now).
 export function calculateAge(birthDate: Date, today: Date = new Date()): number {
   let age = today.getUTCFullYear() - birthDate.getUTCFullYear();

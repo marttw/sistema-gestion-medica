@@ -5,21 +5,19 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/features/auth/session";
 
 import { DuplicateDocumentNumberError, insertPatient } from "../repository";
-import { type PatientFormInput, patientSchema } from "../schemas/patient-schema";
+import { patientSchema } from "../schemas/patient-schema";
+import {
+  DUPLICATE_DNI_MESSAGE,
+  firstErrorPerField,
+  INVALID_INPUT_MESSAGE,
+  type PatientActionResult,
+} from "./patient-action-result";
 
-export type PatientFieldErrors = Partial<Record<keyof PatientFormInput, string>>;
-
-export type CreatePatientResult =
-  | { ok: true }
-  | { ok: false; fieldErrors?: PatientFieldErrors; error?: string };
-
-const DUPLICATE_DNI_MESSAGE = "Ya tenés un paciente registrado con este DNI.";
-const INVALID_INPUT_MESSAGE = "Revisá los datos marcados.";
 const UNEXPECTED_ERROR_MESSAGE =
   "No pudimos registrar al paciente. Intentá nuevamente.";
 
 // `input` is `unknown` on purpose: whatever the browser sends is untrusted.
-export async function createPatient(input: unknown): Promise<CreatePatientResult> {
+export async function createPatient(input: unknown): Promise<PatientActionResult> {
   // 1. Authorization: the doctor comes from the session, never from `input`.
   //    Without a session this redirects to /login and nothing is saved.
   const doctor = await requireSession();
@@ -49,15 +47,4 @@ export async function createPatient(input: unknown): Promise<CreatePatientResult
   // 4. The list changed: drop its cached render so it shows the new patient.
   revalidatePath("/patients");
   return { ok: true };
-}
-
-function firstErrorPerField(
-  issues: { path: PropertyKey[]; message: string }[],
-): PatientFieldErrors {
-  const errors: PatientFieldErrors = {};
-  for (const issue of issues) {
-    const field = issue.path[0] as keyof PatientFormInput | undefined;
-    if (field && !errors[field]) errors[field] = issue.message;
-  }
-  return errors;
 }
