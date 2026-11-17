@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   Table,
   TableBody,
@@ -27,7 +29,12 @@ export function PatientsTable({ patients }: { patients: PatientDisplay[] }) {
           {patients.map((patient) => (
             <TableRow key={patient.id}>
               <TableCell className="pl-4 font-medium">
-                {patient.fullName}
+                <Link
+                  href={patient.detailHref}
+                  className="underline-offset-4 hover:underline"
+                >
+                  {patient.fullName}
+                </Link>
               </TableCell>
               <TableCell className="tabular-nums">
                 {patient.documentNumber}

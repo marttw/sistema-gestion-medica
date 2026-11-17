@@ -2,16 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Prisma } from "@/generated/prisma/client";
 
-const { findMany, create } = vi.hoisted(() => ({
+const { findMany, findFirst, create } = vi.hoisted(() => ({
   findMany: vi.fn(),
+  findFirst: vi.fn(),
   create: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/db", () => ({ db: { patient: { findMany, create } } }));
+vi.mock("@/lib/db", () => ({ db: { patient: { findMany, findFirst, create } } }));
 
 import {
   DuplicateDocumentNumberError,
+  findPatientForDoctor,
   findPatientsByDoctor,
   insertPatient,
 } from "./repository";
@@ -94,5 +96,36 @@ describe("findPatientsByDoctor", () => {
       "lastName",
       "phone",
     ]);
+  });
+});
+
+describe("findPatientForDoctor", () => {
+  const patientId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+
+  it("filters by patient id AND doctor in the same query", async () => {
+    findFirst.mockResolvedValue(null);
+
+    await findPatientForDoctor("doctor-ana", patientId);
+
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: patientId, doctorId: "doctor-ana" } }),
+    );
+  });
+
+  it("returns null when the patient is missing or belongs to another doctor", async () => {
+    findFirst.mockResolvedValue(null);
+
+    await expect(findPatientForDoctor("doctor-ana", patientId)).resolves.toBeNull();
+  });
+
+  it("selects the same administrative fields as the list (never the doctor)", async () => {
+    findFirst.mockResolvedValue(null);
+    findMany.mockResolvedValue([]);
+
+    await findPatientForDoctor("doctor-ana", patientId);
+    await findPatientsByDoctor("doctor-ana");
+
+    expect(findFirst.mock.calls[0][0].select).toEqual(findMany.mock.calls[0][0].select);
+    expect(findFirst.mock.calls[0][0].select).not.toHaveProperty("doctorId");
   });
 });

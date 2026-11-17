@@ -4,11 +4,12 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
 import type { PatientFormData } from "./schemas/patient-schema";
-import type { PatientListItem } from "./types";
+import type { PatientDetail, PatientListItem } from "./types";
 
-// Only the columns the list shows. `satisfies` checks the shape against
-// Prisma's types without widening it.
-const patientListSelect = {
+// Only the administrative columns the UI shows (never doctorId or
+// timestamps). `satisfies` checks the shape against Prisma's types without
+// widening it.
+const patientSelect = {
   id: true,
   firstName: true,
   lastName: true,
@@ -28,8 +29,22 @@ export async function findPatientsByDoctor(
 ): Promise<PatientListItem[]> {
   return db.patient.findMany({
     where: { doctorId },
-    select: patientListSelect,
+    select: patientSelect,
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+  });
+}
+
+// One patient, only if it belongs to the given doctor. Both conditions go in
+// the same WHERE, so another doctor's patient and a missing one look the same
+// (null): there is no separate ownership check that could be forgotten, and
+// no way to learn that an id exists in someone else's account.
+export async function findPatientForDoctor(
+  doctorId: string,
+  patientId: string,
+): Promise<PatientDetail | null> {
+  return db.patient.findFirst({
+    where: { id: patientId, doctorId },
+    select: patientSelect,
   });
 }
 
