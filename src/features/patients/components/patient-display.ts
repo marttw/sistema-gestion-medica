@@ -8,6 +8,7 @@ export function toPatientDisplay(patient: PatientListItem, today: Date) {
   const age = calculateAge(patient.birthDate, today);
   return {
     id: patient.id,
+    detailHref: `/patients/${patient.id}`,
     fullName: `${patient.lastName}, ${patient.firstName}`,
     documentNumber: formatDocumentNumber(patient.documentNumber),
     birthDate: formatDate(patient.birthDate),

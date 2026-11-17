@@ -110,7 +110,7 @@ src/
 │   ├── (private)/     # Páginas que requieren sesión (el grupo no aparece en la URL)
 │   │   ├── layout.tsx # Layout privado: menú lateral + header + contenido
 │   │   ├── page.tsx   # Ruta "/" (bienvenida)
-│   │   └── patients/  # "/patients": listado y estado de error; "/patients/new": alta
+│   │   └── patients/  # "/patients": listado; "/patients/new": alta; "/patients/[patientId]": detalle
 │   ├── login/         # Ruta "/login" (pública)
 │   ├── globals.css    # Tailwind + tokens de diseño (colores, radios, fuentes)
 │   └── api/
@@ -160,6 +160,12 @@ Cada dominio separa el acceso a datos en dos capas (por ejemplo, en `src/feature
 
 Así, la identidad del médico siempre sale de la sesión del servidor y nunca de datos enviados por el navegador, y cada médico solo ve sus propios pacientes.
 
+Para un recurso individual (por ejemplo `getMyPatient(id)`), el ID de la URL **no autoriza nada**:
+
+- La consulta filtra por el ID **y** por el médico de la sesión en el mismo `WHERE`, y devuelve `null` si no hay coincidencia.
+- La página responde con `notFound()`, tanto si el paciente no existe como si es de otro médico, para no confirmar que el ID existe en otra cuenta.
+- Los IDs que no son UUID se descartan antes de consultar la base.
+
 Las escrituras siguen el mismo principio. Una Server Action (por ejemplo `actions/create-patient.ts`) hace lo siguiente:
 
 1. Obtiene al médico con `requireSession()`.
@@ -196,6 +202,15 @@ Para agregar una sección al menú:
 2. Agregá una entrada en `NAV_ITEMS` (`src/components/layout/navigation.ts`) con el título, la ruta y un ícono de `lucide-react`.
 
 El menú marca la sección activa automáticamente, también en sus subrutas (por ejemplo `/patients/123`).
+
+En las rutas con parámetros dinámicos, la URL recién se conoce al recibir el pedido. Por eso el menú está dentro de un `<Suspense>` que, mientras tanto, muestra los mismos links sin marcar el activo.
+
+### Errores y "no encontrado"
+
+- `error.tsx` muestra un error de carga (por ejemplo, si la base no responde) con un botón Reintentar. La UI es común: `src/components/load-error.tsx`.
+- `not-found.tsx` se muestra cuando la página llama a `notFound()`.
+
+Ambos reemplazan solo el contenido: el menú y el header siguen visibles.
 
 ## Estilos y componentes
 

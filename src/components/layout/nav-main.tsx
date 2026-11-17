@@ -16,8 +16,23 @@ import { NAV_ITEMS, isActivePath } from "./navigation";
 
 // The only client-side piece of the menu: it needs the current URL
 // (usePathname) to highlight the active section.
+//
+// With Cache Components, on a route with an unknown dynamic param (e.g.
+// /patients/[patientId]) the pathname does not exist at build time, so
+// usePathname() suspends. AppSidebar wraps this in <Suspense> with
+// NavMainFallback: the same links, none marked active, until the real
+// pathname streams in. On static routes it resolves at build time and the
+// fallback is never shown.
 export function NavMain() {
   const pathname = usePathname();
+  return <NavMenu pathname={pathname} />;
+}
+
+export function NavMainFallback() {
+  return <NavMenu pathname={null} />;
+}
+
+function NavMenu({ pathname }: { pathname: string | null }) {
   const { isMobile, setOpenMobile } = useSidebar();
 
   return (
@@ -25,7 +40,7 @@ export function NavMain() {
       <SidebarGroupContent>
         <SidebarMenu>
           {NAV_ITEMS.map((item) => {
-            const isActive = isActivePath(pathname, item.href);
+            const isActive = pathname !== null && isActivePath(pathname, item.href);
             return (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton

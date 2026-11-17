@@ -12,7 +12,8 @@ Registro de cada user story completada: qué se hizo, cómo y por qué. Compleme
 | US-06 | SIS-13 | Crear layout principal y menú de navegación | ✅ Mergeada (PR #6) |
 | US-07 | SIS-14 | Crear modelo y listado de pacientes | ✅ Mergeada (PR #7) |
 | US-08 | SIS-15 | Implementar alta de pacientes | ✅ Mergeada (PR #8) |
-| US-08b | SIS-22 | Normalizar teléfonos de pacientes a E.164 | ✅ Completa |
+| US-08b | SIS-22 | Normalizar teléfonos de pacientes a E.164 | ✅ Mergeada (PR #9) |
+| US-09 | SIS-16 | Visualizar detalle de paciente | ✅ Completa |
 
 ---
 
@@ -352,3 +353,49 @@ Story agregada al backlog durante la US-08. Al cargar pacientes de prueba, los t
   - Nunca borra ni modifica lo que no puede interpretar; lo lista para corregirlo a mano.
   - `formatPhone` muestra esos valores tal cual, sin romper la pantalla.
 - **La validación encontró datos inválidos en el seed:** los dos teléfonos de Córdoba del seed de la US-07 (`+54 9 351 5555-0201`) tenían un dígito de más. En Argentina, el código de área más el número suman 10 dígitos. La migración los reportó en lugar de "corregirlos", y se arreglaron en el seed. Es un ejemplo de por qué conviene validar contra el plan de numeración y no solo la longitud.
+
+---
+
+## US-09: Visualizar detalle de paciente
+
+**Fecha:** 2026-11-17
+
+### Qué se hizo
+
+- Se creó la ruta dinámica `/patients/[patientId]`, con los datos administrativos del paciente en tres secciones: datos personales, contacto y cobertura. Va a una columna en móvil y a dos desde `sm`. El teléfono y el correo son links (`tel:` y `mailto:`).
+- El nombre del paciente en el listado es un link al detalle. En móvil, toda la tarjeta es clickeable.
+- La consulta y la autorización:
+  - `getMyPatient(id)` (en `queries.ts`) toma al médico de la sesión, valida que el ID sea un UUID y llama a `findPatientForDoctor(doctorId, id)`.
+  - `findPatientForDoctor` (en `repository.ts`) filtra por `id` **y** `doctorId` en la misma consulta.
+- Estados:
+  - `not-found.tsx`: el mismo mensaje para un ID inválido, uno inexistente o un paciente de otro médico.
+  - `error.tsx`: si falla la base, con Reintentar y un link al listado.
+  - Un skeleton mientras carga.
+- Se extrajo `src/components/load-error.tsx`, la UI común de los error boundaries, que ahora usan el listado y el detalle.
+- El menú lateral (`NavMain`) quedó dentro de un `<Suspense>`. Ver decisiones.
+- Se agregaron 14 tests (111 en total).
+
+### Herramientas y para qué las usamos
+
+- **Rutas dinámicas (`[patientId]`):** una carpeta entre corchetes captura un segmento de la URL. Next pasa su valor en la prop `params`, que es una promesa. El tipo `PageProps<"/patients/[patientId]">` lo genera `next typegen`.
+- **`notFound()` y `not-found.tsx`:** `notFound()` corta el render y muestra el `not-found.tsx` más cercano.
+- **`z.uuid()` (Zod):** valida el formato del ID antes de consultar la base.
+
+### Decisiones
+
+- **Un paciente ajeno es indistinguible de uno inexistente:**
+  - No se busca el paciente para después revisar el médico: las dos condiciones están en el mismo `WHERE`, así que no existe un chequeo de pertenencia que alguien pueda olvidar.
+  - Se responde "no encontrado" (y no "prohibido"), porque un 403 confirmaría que el ID existe en otra cuenta.
+  - Verificado por HTTP: con la sesión de Ana, el ID de un paciente de Bruno muestra el mismo "no encontrado" que un ID inventado, y el HTML no contiene ningún dato de Bruno.
+- **Validar el UUID antes de consultar:** la columna es `@db.Uuid`, y PostgreSQL responde con un error a un valor como `abc`. Sin la validación, esa URL mostraría "No pudimos cargar el paciente" en lugar de "No encontrado", y dejaría una consulta fallida en los logs.
+- **El título de la pestaña es "Paciente", sin el nombre:** los títulos quedan en el historial del navegador y en los marcadores. En un sistema médico conviene no guardar ahí nombres de pacientes. El nombre se ve en el `<h1>`.
+- **Código HTTP 200 en "no encontrado":**
+  - Con Cache Components, la página envía primero el shell estático (layout y menú) y después el contenido por streaming. Cuando `notFound()` se ejecuta, el código HTTP ya se envió.
+  - Next muestra igual la UI de no encontrado y agrega `<meta name="robots" content="noindex">`.
+  - Para un área privada no tiene impacto. La alternativa (bloquear la página hasta consultar la base) haría más lenta cada visita al detalle.
+- **El menú lateral dentro de `<Suspense>`:**
+  - El build falló con la ruta nueva: en `/patients/[patientId]` el pathname no se conoce al prerenderizar, así que `usePathname()` suspende. Eso afecta incluso al menú del layout.
+  - Siguiendo la documentación de Next, `NavMain` va dentro de un `<Suspense>` cuyo fallback muestra los mismos links sin marcar el activo.
+  - En las rutas estáticas el pathname se resuelve en el build y el fallback nunca se ve.
+- **`PatientDetail` comparte la forma de `PatientListItem`:** hoy el listado ya muestra todos los datos administrativos. Tener un tipo propio permite que el detalle sume campos sin tocar el listado.
+- **Sin fecha de alta ni de modificación:** son timestamps, y mostrarlos bien requiere manejar la zona horaria de Argentina. Se agregarán cuando una story lo necesite.

@@ -1,5 +1,6 @@
 import { Stethoscope } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import {
   Sidebar,
@@ -10,7 +11,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import { NavMain } from "./nav-main";
+import { NavMain, NavMainFallback } from "./nav-main";
 import { SidebarCollapseButton } from "./sidebar-collapse-button";
 
 // Side menu of the private area. On desktop it can collapse to icons;
@@ -38,7 +39,11 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain />
+        {/* NavMain reads the URL, which on dynamic routes is only known at
+            request time (see nav-main.tsx). */}
+        <Suspense fallback={<NavMainFallback />}>
+          <NavMain />
+        </Suspense>
       </SidebarContent>
       <SidebarCollapseButton />
     </Sidebar>
